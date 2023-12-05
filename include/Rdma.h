@@ -6,6 +6,8 @@
 #include <assert.h>
 #include <cstring>
 #include <infiniband/verbs.h>
+#include <infiniband/mlx5dv.h>
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -72,7 +74,7 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
                      ibv_cq *recv_cq, RdmaContext *context,
                      uint32_t qpsMaxDepth = 128, uint32_t maxInlineData = 0);
 
-bool createDCTarget(ibv_exp_dct **dct, ibv_cq *cq, RdmaContext *context,
+bool createDCTarget(ibv_qp **dct, ibv_cq *cq, RdmaContext *context,
                     uint32_t qpsMaxDepth = 128, uint32_t maxInlineData = 0);
 void fillAhAttr(ibv_ah_attr *attr, uint32_t remoteLid, uint8_t *remoteGid,
                 RdmaContext *context);
