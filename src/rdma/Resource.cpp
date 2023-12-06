@@ -148,12 +148,12 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, uint64_t mmSize,
     Debug::notifyError("Allocate on-chip memory failed");
     return nullptr;
   }
-
-  struct ibv_mr *mr = ibv_reg_mr(ctx->pd, (void *)mm, mmSize, 
-        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | 
-        IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_ATOMIC);
+  struct ibv_mr *mr = ibv_reg_dm_mr(ctx->pd, dm, 0, mmSize, 
+              IBV_ACCESS_ZERO_BASED|IBV_ACCESS_LOCAL_WRITE | 
+              IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | 
+              IBV_ACCESS_REMOTE_ATOMIC);
   if (!mr) {
-    Debug::notifyError("Memory registration failed");
+    Debug::notifyError("Memory registration on chip failed");
     return nullptr;
   }
 
@@ -173,36 +173,61 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
                      ibv_cq *recv_cq, RdmaContext *context,
                      uint32_t qpsMaxDepth, uint32_t maxInlineData) {
 
-  // struct ibv_exp_qp_init_attr attr;
-  // memset(&attr, 0, sizeof(attr));
+  
+  // struct mlx5dv_qp_init_attr dv_init_attr;
+  // struct ibv_qp_init_attr_ex init_attr;
+ 
+  // memset(&dv_init_attr, 0, sizeof(dv_init_attr));
+  // memset(&init_attr, 0, sizeof(init_attr));
+  // init_attr.qp_type = IBV_QPT_DRIVER;
+  // init_attr.send_cq = send_cq;
+  // init_attr.recv_cq = recv_cq;
+  // init_attr.pd = context->pd;
+  
 
-  // attr.qp_type = mode;
-  // attr.sq_sig_all = 0;
-  // attr.send_cq = send_cq;
-  // attr.recv_cq = recv_cq;
-  // attr.pd = context->pd;
+  // init_attr.comp_mask |= IBV_QP_INIT_ATTR_SEND_OPS_FLAGS | IBV_QP_INIT_ATTR_PD;
+  // init_attr.send_ops_flags |= IBV_QP_EX_WITH_SEND;
 
-  // if (mode == IBV_QPT_RC) {
-  //   attr.comp_mask = IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS |
-  //                    IBV_EXP_QP_INIT_ATTR_PD | IBV_EXP_QP_INIT_ATTR_ATOMICS_ARG;
-  //   attr.max_atomic_arg = 32;
-  // } else {
-  //   attr.comp_mask = IBV_EXP_QP_INIT_ATTR_PD;
-  // }
 
-  // attr.cap.max_send_wr = qpsMaxDepth;
-  // attr.cap.max_recv_wr = qpsMaxDepth;
-  // attr.cap.max_send_sge = 1;
-  // attr.cap.max_recv_sge = 1;
-  // attr.cap.max_inline_data = maxInlineData;
-
-  // *qp = ibv_exp_create_qp(context->ctx, &attr);
+  // dv_init_attr.comp_mask |= MLX5DV_QP_INIT_ATTR_MASK_DC |
+  //                           MLX5DV_QP_INIT_ATTR_MASK_QP_CREATE_FLAGS;
+  // dv_init_attr.create_flags |= MLX5DV_QP_CREATE_DISABLE_SCATTER_TO_CQE;
+  // dv_init_attr.dc_init_attr.dc_type = MLX5DV_DCTYPE_DCI;
+  // *qp = mlx5dv_create_qp(context->ctx, &init_attr, &dv_init_attr);
+  // // auto ex_qp = ibv_qp_to_qp_ex(*qp);
+  // // auto dv_qp = mlx5dv_qp_ex_from_ibv_qp_ex(ex_qp);
   // if (!(*qp)) {
   //   Debug::notifyError("Failed to create QP");
+  //   Debug::notifyError("Failed to create QP, %s", strerror(errno));
   //   return false;
   // }
+  
+  struct ibv_qp_init_attr attr;
+  memset(&attr, 0, sizeof(attr));
+  attr.qp_type = mode;
+  attr.sq_sig_all = 0;
+  attr.send_cq = send_cq;
+  attr.recv_cq = recv_cq;
+  // if (mode == IBV_QPT_RC) {
+  //   attr.comp_mask = IBV_QP_INIT_ATTR_CREATE_FLAGS | IBV_QP_INIT_ATTR_PD;
+  //   attr.max_atomic_arg = 32;
+  // } else {
+  //   attr.comp_mask = IBV_QP_INIT_ATTR_PD;
+  // }
 
-  // // Debug::notifyInfo("Create Queue Pair with Num = %d", (*qp)->qp_num);
+  attr.cap.max_send_wr = qpsMaxDepth;
+  attr.cap.max_recv_wr = qpsMaxDepth;
+  attr.cap.max_send_sge = 1;
+  attr.cap.max_recv_sge = 1;
+  attr.cap.max_inline_data = maxInlineData;
+
+  *qp = ibv_create_qp(context->pd, &attr);
+  if (!(*qp)) {
+    Debug::notifyError("Failed to create QP");
+    return false;
+  }
+  Debug::notifyInfo("Create Queue Pair with Num = %d", (*qp)->qp_num);
+
 
   return true;
 }
@@ -215,40 +240,69 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *cq,
 
 bool createDCTarget(ibv_qp **dct, ibv_cq *cq, RdmaContext *context,
                     uint32_t qpsMaxDepth, uint32_t maxInlineData) {
+  struct mlx5dv_qp_init_attr dv_init_attr;
+  struct ibv_qp_init_attr_ex init_attr;
+  memset(&dv_init_attr, 0, sizeof(dv_init_attr));
+  memset(&init_attr, 0, sizeof(init_attr));
+ 
+  init_attr.qp_type = IBV_QPT_DRIVER;
+  init_attr.send_cq = cq;
+  init_attr.recv_cq = cq;
+  init_attr.pd = context->pd;
 
-  // construct SRQ fot DC Target :)
+  init_attr.comp_mask |= IBV_QP_INIT_ATTR_PD;
   struct ibv_srq_init_attr attr;
   memset(&attr, 0, sizeof(attr));
   attr.attr.max_wr = qpsMaxDepth;
   attr.attr.max_sge = 1;
-  ibv_srq *srq = ibv_create_srq(context->pd, &attr);
-  
-  // ibv_qp_init_attr_ex dAttr;
-  // memset(&dAttr, 0, sizeof(dAttr));
-  // dAttr.pd = context->pd;
-  // dAttr.cq = cq;
-  // dAttr.srq = srq;
-  // dAttr.dc_key = DCT_ACCESS_KEY;
-  // dAttr.port = context->port;
-  // dAttr.access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_READ |
-  //                      IBV_ACCESS_REMOTE_ATOMIC;
-  // dAttr.min_rnr_timer = 2;
-  // dAttr.tclass = 0;
-  // dAttr.flow_label = 0;
-  // dAttr.mtu = IBV_MTU_4096;
-  // dAttr.pkey_index = 0;
-  // dAttr.hop_limit = 1;
-  // dAttr.create_flags = 0;
-  // dAttr.inline_size = maxInlineData;
-
-  // *dct = mlx5dv_create_qp(context->ctx, &dAttr);
-  *dct = mlx5dv_create_qp(context->ctx, nullptr, nullptr);
+  init_attr.srq = ibv_create_srq(context->pd, &attr);
+  dv_init_attr.comp_mask = MLX5DV_QP_INIT_ATTR_MASK_DC;
+  dv_init_attr.dc_init_attr.dc_type = MLX5DV_DCTYPE_DCT;
+  dv_init_attr.dc_init_attr.dct_access_key = DCT_ACCESS_KEY;
+ 
+ 
+  *dct = mlx5dv_create_qp(context->ctx, &init_attr, &dv_init_attr);
   if (dct == NULL) {
     Debug::notifyError("failed to create dc target");
     return false;
   }
 
   return true;
+  
+
+
+/*// construct SRQ fot DC Target :)
+  struct ibv_srq_init_attr attr;
+  memset(&attr, 0, sizeof(attr));
+  attr.attr.max_wr = qpsMaxDepth;
+  attr.attr.max_sge = 1;
+  ibv_srq *srq = ibv_create_srq(context->pd, &attr);
+
+  ibv_exp_dct_init_attr dAttr;
+  memset(&dAttr, 0, sizeof(dAttr));
+  dAttr.pd = context->pd;
+  dAttr.cq = cq;
+  dAttr.srq = srq;
+  dAttr.dc_key = DCT_ACCESS_KEY;
+  dAttr.port = context->port;
+  dAttr.access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_READ |
+                       IBV_ACCESS_REMOTE_ATOMIC;
+  dAttr.min_rnr_timer = 2;
+  dAttr.tclass = 0;
+  dAttr.flow_label = 0;
+  dAttr.mtu = IBV_MTU_4096;
+  dAttr.pkey_index = 0;
+  dAttr.hop_limit = 1;
+  dAttr.create_flags = 0;
+  dAttr.inline_size = maxInlineData;
+
+  *dct = ibv_exp_create_dct(context->ctx, &dAttr);
+  if (dct == NULL) {
+    Debug::notifyError("failed to create dc target");
+    return false;
+  }
+
+  return true;*/
 }
 
 void fillAhAttr(ibv_ah_attr *attr, uint32_t remoteLid, uint8_t *remoteGid,
