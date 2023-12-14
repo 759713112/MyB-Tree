@@ -197,8 +197,9 @@ public:
 
 inline GlobalAddress DSM::alloc(size_t size) {
 
-  thread_local int next_target_node =
-      (getMyThreadID() + getMyNodeID()) % conf.machineNR;
+  // thread_local int next_target_node =
+  //     (getMyThreadID() + getMyNodeID()) % conf.machineNR;
+  thread_local int next_target_node = 0;
   thread_local int next_target_dir_id =
       (getMyThreadID() + getMyNodeID()) % NR_DIRECTORY;
 
@@ -211,10 +212,10 @@ inline GlobalAddress DSM::alloc(size_t size) {
     this->rpc_call_dir(m, next_target_node, next_target_dir_id);
     local_allocator.set_chunck(rpc_wait()->addr);
 
-    if (++next_target_dir_id == NR_DIRECTORY) {
-      next_target_node = (next_target_node + 1) % conf.machineNR;
-      next_target_dir_id = 0;
-    }
+    // if (++next_target_dir_id == NR_DIRECTORY) {
+    //   next_target_node = (next_target_node + 1) % conf.machineNR;
+    //   next_target_dir_id = 0;
+    // }
 
     // retry
     addr = local_allocator.malloc(size, need_chunk);

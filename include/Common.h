@@ -103,6 +103,7 @@ constexpr uint8_t kMaxHandOverTime = 8;
 constexpr int kIndexCacheSize = 1000; // MB
 } // namespace define
 
+//高精度时间戳
 static inline unsigned long long asm_rdtsc(void) {
   unsigned hi, lo;
   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));

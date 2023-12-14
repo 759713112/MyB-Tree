@@ -15,36 +15,42 @@ thread_local RdmaBuffer DSM::rbuf[define::kMaxCoro];
 thread_local uint64_t DSM::thread_tag = 0;
 
 DSM *DSM::getInstance(const DSMConfig &conf) {
-  static DSM *dsm = nullptr;
-  static WRLock lock;
+  static DSM dsm(conf);
+  return &dsm;
+  // static DSM *dsm = nullptr;
+  // static WRLock lock;
 
-  lock.wLock();
-  if (!dsm) {
-    dsm = new DSM(conf);
-  } else {
-  }
-  lock.wUnlock();
+  // lock.wLock();
+  // if (!dsm) {
+  //   dsm = new DSM(conf);
+  // } else {
+  // }
+  // lock.wUnlock();
 
-  return dsm;
+  // return dsm;
 }
 
 DSM::DSM(const DSMConfig &conf)
     : conf(conf), appID(0), cache(conf.cacheConfig) {
 
-  baseAddr = (uint64_t)hugePageAlloc(conf.dsmSize * define::GB);
+  if (conf.isMemoryNode) {
+    baseAddr = (uint64_t)hugePageAlloc(conf.dsmSize * define::GB);
+    Debug::notifyInfo("shared memory size: %dGB, 0x%lx", conf.dsmSize, baseAddr);
+    Debug::notifyInfo("cache size: %dGB", conf.cacheConfig.cacheSize);
 
-  Debug::notifyInfo("shared memory size: %dGB, 0x%lx", conf.dsmSize, baseAddr);
-  Debug::notifyInfo("cache size: %dGB", conf.cacheConfig.cacheSize);
-
-  // warmup
-  // memset((char *)baseAddr, 0, conf.dsmSize * define::GB);
-  for (uint64_t i = baseAddr; i < baseAddr + conf.dsmSize * define::GB;
-       i += 2 * define::MB) {
-    *(char *)i = 0;
+    // warmup
+    // memset((char *)baseAddr, 0, conf.dsmSize * define::GB);
+    for (uint64_t i = baseAddr; i < baseAddr + conf.dsmSize * define::GB;
+        i += 2 * define::MB) {
+      *(char *)i = 0;
+    }
+    // clear up first chunk
+    memset((char *)baseAddr, 0, define::kChunkSize);
   }
 
-  // clear up first chunk
-  memset((char *)baseAddr, 0, define::kChunkSize);
+  
+
+  
 
   initRDMAConnection();
 

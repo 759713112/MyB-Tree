@@ -10,7 +10,7 @@
 #include "Connection.h"
 #include "GlobalAllocator.h"
 
-
+// 分配内存 
 class Directory {
 public:
   Directory(DirectoryConnection *dCon, RemoteConnection *remoteInfo,
