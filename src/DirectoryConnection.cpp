@@ -4,7 +4,7 @@
 
 DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
                                          uint64_t dsmSize, uint32_t machineNR,
-                                         RemoteConnection *remoteInfo)
+                                         RemoteConnection *remoteInfo, bool isMemoryNode)
     : dirID(dirID), remoteInfo(remoteInfo) {
 
   createContext(&ctx);
@@ -24,8 +24,13 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
   if (dirID == 0) {
     this->lockPool = (void *)define::kLockStartAddr;
     this->lockSize = define::kLockChipMemSize;
-    this->lockMR = createMemoryRegionOnChip((uint64_t)this->lockPool,
+    if (isMemoryNode) {
+      this->lockMR = createMemoryRegionOnChip((uint64_t)this->lockPool,
                                             this->lockSize, &ctx);
+    } else {
+      this->lockMR = new struct ibv_mr();
+    }
+    // 
     this->lockLKey = lockMR->lkey;
   }
 

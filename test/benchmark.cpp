@@ -98,7 +98,7 @@ void thread_run(int id) {
   }
 
   uint64_t end_warm_key = kWarmRatio * kKeySpace;
-  for (uint64_t i = 1; i < end_warm_key; ++i) {
+  for (uint64_t i = 1; i < 20; ++i) {
     if (i % all_thread == my_id) {
       tree->insert(to_key(i), i * 2);
     }
@@ -234,7 +234,7 @@ int main(int argc, char *argv[]) {
   tree = new Tree(dsm);
 
   if (dsm->getMyNodeID() == 0) {
-    for (uint64_t i = 1; i < 1024000; ++i) {
+    for (uint64_t i = 1; i < 10; ++i) {
       tree->insert(to_key(i), i * 2);
     }
   }

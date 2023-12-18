@@ -33,6 +33,8 @@ DSM *DSM::getInstance(const DSMConfig &conf) {
 DSM::DSM(const DSMConfig &conf)
     : conf(conf), appID(0), cache(conf.cacheConfig) {
 
+
+  remoteInfo = new RemoteConnection[conf.machineNR];
   if (conf.isMemoryNode) {
     baseAddr = (uint64_t)hugePageAlloc(conf.dsmSize * define::GB);
     Debug::notifyInfo("shared memory size: %dGB, 0x%lx", conf.dsmSize, baseAddr);
@@ -44,15 +46,46 @@ DSM::DSM(const DSMConfig &conf)
         i += 2 * define::MB) {
       *(char *)i = 0;
     }
+
+    for (int i = 0; i < NR_DIRECTORY; ++i) {
+      dirCon[i] =
+          new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
+                                  conf.machineNR, remoteInfo, true);
+    }
     // clear up first chunk
     memset((char *)baseAddr, 0, define::kChunkSize);
+  } else {
+    baseAddr = (uint64_t)malloc(64);
+    for (int i = 0; i < NR_DIRECTORY; ++i) {
+      dirCon[i] =
+          new DirectoryConnection(i, (void *)baseAddr, 64,
+                                  conf.machineNR, remoteInfo, false);
+    }
+    
   }
 
+  //initRDMAConnection();
+  {
+    Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
+
+    
+
+    for (int i = 0; i < MAX_APP_THREAD; ++i) {
+      thCon[i] =
+          new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
+                              conf.machineNR, remoteInfo);
+    }
+
+    
+
+  }
+  
+  
   
 
-  
+  keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR);
 
-  initRDMAConnection();
+  myNodeID = keeper->getMyNodeID();
 
   Debug::notifyInfo("number of threads on memory node: %d", NR_DIRECTORY);
   for (int i = 0; i < NR_DIRECTORY; ++i) {
@@ -103,11 +136,14 @@ void DSM::initRDMAConnection() {
                              conf.machineNR, remoteInfo);
   }
 
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
+  if (conf.isMemoryNode) {
+    for (int i = 0; i < NR_DIRECTORY; ++i) {
     dirCon[i] =
         new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
-                                conf.machineNR, remoteInfo);
+                                conf.machineNR, remoteInfo, true);
+    }
   }
+  
 
   keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR);
 

@@ -140,6 +140,8 @@ bool Tree::update_new_root(GlobalAddress left, const Key &k,
     broadcast_new_root(new_root_addr, level);
     std::cout << "new root level " << level << " " << new_root_addr
               << std::endl;
+    std::cout << "old root level " << level << " " << old_root
+              << std::endl;
     return true;
   } else {
     std::cout << "cas root fail " << std::endl;

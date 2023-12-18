@@ -146,6 +146,7 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, uint64_t mmSize,
   struct ibv_dm *dm = ibv_alloc_dm(ctx->ctx, &dm_attr);
   if (!dm) {
     Debug::notifyError("Allocate on-chip memory failed");
+    exit(-1);
     return nullptr;
   }
   struct ibv_mr *mr = ibv_reg_dm_mr(ctx->pd, dm, 0, mmSize, 
