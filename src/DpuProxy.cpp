@@ -1,68 +1,70 @@
-#include <iostream>
-#include <thread>
 
 #include "DpuProxy.h"
+#include "Directory.h"
+#include "HugePageAlloc.h"
 
-thread_local int DpuProxy::thread_id = -1;
+#include "DSDpuKeeper.h"
 
+#include <algorithm>
 
-DpuProxy::DpuProxy(uint32_t thread_num, RemoteConnection *remoteInfo) {
+// thread_local int DpuProxy::thread_id = -1;
+// thread_local ThreadConnection *DpuProxy::iCon = nullptr;
+// thread_local char *DpuProxy::rdma_buffer = nullptr;
+// thread_local LocalAllocator DpuProxy::local_allocator;
+// thread_local RdmaBuffer DpuProxy::rbuf[define::kMaxCoro];
+// thread_local uint64_t DpuProxy::thread_tag = 0;
+
+DpuProxy *DpuProxy::getInstance(const DSMConfig &conf) {
+  static DpuProxy dsm(conf);
+  return &dsm;
+}
+
+DpuProxy::DpuProxy(const DSMConfig &conf)
+    : DSM(conf) {
+
+  remoteInfo = new RemoteConnection[0];
+  computeInfo = new RemoteConnection[conf.machineNR];
+
+  {
+    Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
+    for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+      hostCon[i] =
+          new ThreadConnection(i, (void *)cache.data, cache.size * define::GB, 1, remoteInfo);
+      auto rpc_cq = ibv_create_cq(hostCon[i]->ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
+      dpuCon[i] = new DpuConnection(hostCon[i]->ctx, rpc_cq, APP_MESSAGE_NR);
+      dpuCon[i]->initRecv();
+    }
+  }
   
-  createContext(&this->ctx);
-
-  this->complete_queues.resize(DPU_CONNECTION_NUMS);
-  this->dpuProxConnections.resize(DPU_CONNECTION_NUMS);
-  for (auto &con: dpuProxConnections) {
-    ibv_cq *cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
-    con = new DpuProxyConnection(ctx, cq, DIR_MESSAGE_NR);
-    con->initRecv();
-  }
-
-  this->threads.resize(thread_num);
-  for (uint32_t i = 0; i < thread_num; i++) {
-    threads[i] = std::thread(&DpuProxy::run, this, i);
-  }
-
+  keeper = new DSDpuKeeper(hostCon, dpuCon, remoteInfo, computeInfo, conf.machineNR);
+  myNodeID = keeper->getMyNodeID();
+  keeper->barrier("DpuProxy-init");
 }
 
-DpuProxy::~DpuProxy() {
+DpuProxy::~DpuProxy() {}
 
-}
+void DpuProxy::registerThread() {
 
+  static bool has_init[MAX_APP_THREAD];
 
-void DpuProxy::run(int thread_id) {
-  this->thread_id = thread_id;
-  bindCore(thread_id % 16);
+  if (thread_id != -1)
+    return;
 
-  while (true) {
-    struct ibv_wc wc;
-    auto conn = this->dpuProxConnections[thread_id % DPU_CONNECTION_NUMS];
-    pollWithCQ(conn->get_cq(), 1, &wc);
+  thread_id = appID.fetch_add(1);
+  thread_tag = thread_id + (((uint64_t)this->getMyNodeID()) << 32) + 1;
 
-    switch (int(wc.opcode)) {
-    case IBV_WC_RECV: // control message
-    {
+  iCon = hostCon[thread_id];
 
-      auto *m = (Request *)conn->getMessage();
+  if (!has_init[thread_id]) {
+    iCon->message->initRecv();
+    iCon->message->initSend();
 
-      process_request(m);
-
-      break;
-    }
-    case IBV_WC_RDMA_WRITE: {
-      break;
-    }
-    case IBV_WC_RECV_RDMA_WITH_IMM: {
-
-      break;
-    }
-    default:
-      assert(false);
-    }
+    has_init[thread_id] = true;
   }
-}
 
-void DpuProxy::process_request(const Request *req) {
-    std::cout << "process_request" << std::endl;
-    sleep(1);
+  rdma_buffer = (char *)cache.data + thread_id * 12 * define::MB;
+
+  for (int i = 0; i < define::kMaxCoro; ++i) {
+    rbuf[i].set_buffer(rdma_buffer + i * define::kPerCoroRdmaBuf);
+  }
 }

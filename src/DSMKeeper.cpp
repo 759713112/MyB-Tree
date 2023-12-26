@@ -1,13 +1,30 @@
 #include "DSMKeeper.h"
 
 #include "Connection.h"
-
+#include <iostream>
 const char *DSMKeeper::OK = "OK";
 const char *DSMKeeper::ServerPrefix = "SPre";
 
+DSMKeeper::DSMKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon,
+            uint32_t maxServer, uint32_t maxCompute)
+      : Keeper(maxServer), thCon(thCon),  maxCompute(maxCompute),
+        remoteCon(remoteCon) {
+
+    initLocalMeta();
+
+    if (!connectMemcached()) {
+      return;
+    }
+    computeEnter();
+
+    computeConnect();
+
+
+    initRouteRule();
+}
+
+
 void DSMKeeper::initLocalMeta() {
-  localMeta.dsmBase = (uint64_t)dirCon[0]->dsmPool;
-  localMeta.lockBase = (uint64_t)dirCon[0]->lockPool;
   localMeta.cacheBase = (uint64_t)thCon[0]->cachePool;
 
   // per thread APP
@@ -18,19 +35,8 @@ void DSMKeeper::initLocalMeta() {
            16 * sizeof(uint8_t));
 
     localMeta.appUdQpn[i] = thCon[i]->message->getQPN();
+    localMeta.appUdQpn2dpu[i] = thCon[i]->dpuConnect->getQPN();
   }
-
-  // per thread DIR
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    localMeta.dirTh[i].lid = dirCon[i]->ctx.lid;
-    localMeta.dirTh[i].rKey = dirCon[i]->dsmMR->rkey;
-    localMeta.dirTh[i].lock_rkey = dirCon[i]->lockMR->rkey;
-    memcpy((char *)localMeta.dirTh[i].gid, (char *)(&dirCon[i]->ctx.gid),
-           16 * sizeof(uint8_t));
-
-    localMeta.dirUdQpn[i] = dirCon[i]->message->getQPN();
-  }
-
 }
 
 bool DSMKeeper::connectNode(uint16_t remoteID) {
@@ -46,17 +52,45 @@ bool DSMKeeper::connectNode(uint16_t remoteID) {
   setDataFromRemote(remoteID, remoteMeta);
 
   free(remoteMeta);
+
+  //connect dpu
+  setK = "compute-dpu:" + std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
+  memSet(setK.c_str(), setK.size(), (char *)(&localMeta), sizeof(localMeta));
+
+  getK = "dpu-compute" + std::to_string(remoteID);
+  remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
+  setDataFromRemoteDpu(remoteID, remoteMeta);
+  DpuRequest* r = (DpuRequest*)thCon[0]->dpuConnect->getSendPool();
+  std::cout << "qpn" << remoteCon[0].appRequestQPN[0] << std::endl;
+  thCon[0]->dpuConnect->sendDpuRequest(r, remoteCon[0].appRequestQPN[0], remoteCon[0].appToDpuAh[0][0]);
+  while (true) {
+    struct ibv_wc wc;
+    pollWithCQ(thCon[0]->cq2dpu, 1, &wc);
+
+    switch (int(wc.opcode)) {
+    case IBV_WC_RECV: // control message
+    {
+
+      auto *m = (DpuResponse *)thCon[0]->dpuConnect->getMessage();
+
+      std::cout << "receive from dpu" << std::endl;
+      break;
+    }
+    default:
+      assert(false);
+    }
+  }
   return true;
 }
 
 void DSMKeeper::setDataToRemote(uint16_t remoteID) {
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    auto &c = dirCon[i];
+  // for (int i = 0; i < NR_DIRECTORY; ++i) {
+  //   auto &c = dirCon[i];
 
-    for (int k = 0; k < MAX_APP_THREAD; ++k) {
-      localMeta.dirRcQpn2app[i][k] = c->data2app[k][remoteID]->qp_num;
-    }
-  }
+  //   for (int k = 0; k < MAX_APP_THREAD; ++k) {
+  //     localMeta.dirRcQpn2app[i][k] = c->data2app[k][remoteID]->qp_num;
+  //   }
+  // }
 
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     auto &c = thCon[i];
@@ -68,21 +102,6 @@ void DSMKeeper::setDataToRemote(uint16_t remoteID) {
 }
 
 void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    auto &c = dirCon[i];
-
-    for (int k = 0; k < MAX_APP_THREAD; ++k) {
-      auto &qp = c->data2app[k][remoteID];
-
-      assert(qp->qp_type == IBV_QPT_RC);
-      modifyQPtoInit(qp, &c->ctx);
-      modifyQPtoRTR(qp, remoteMeta->appRcQpn2dir[k][i],
-                    remoteMeta->appTh[k].lid, remoteMeta->appTh[k].gid,
-                    &c->ctx);
-      modifyQPtoRTS(qp);
-    }
-  }
-
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     auto &c = thCon[i];
     for (int k = 0; k < NR_DIRECTORY; ++k) {
@@ -116,26 +135,25 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
       assert(info.appToDirAh[k][i]);
     }
   }
-
-
-  for (int i = 0; i < MAX_APP_THREAD; ++i) {
-    info.appRKey[i] = remoteMeta->appTh[i].rKey;
-    info.appMessageQPN[i] = remoteMeta->appUdQpn[i];
-
-    for (int k = 0; k < NR_DIRECTORY; ++k) {
-      struct ibv_ah_attr ahAttr;
-      fillAhAttr(&ahAttr, remoteMeta->appTh[i].lid, remoteMeta->appTh[i].gid,
-                 &dirCon[k]->ctx);
-      info.dirToAppAh[k][i] = ibv_create_ah(dirCon[k]->ctx.pd, &ahAttr);
-
-      assert(info.dirToAppAh[k][i]);
-    }
-  }
 }
 
-void DSMKeeper::connectMySelf() {
-  setDataToRemote(getMyNodeID());
-  setDataFromRemote(getMyNodeID(), &localMeta);
+
+void DSMKeeper::setDataFromRemoteDpu(uint16_t remoteID, ExchangeMeta *remoteMeta) {
+  auto &info = remoteCon[remoteID];
+  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+    info.appRequestQPN[i] = remoteMeta->dpuUdQpn2app[i];
+    for (int k = 0; k < MAX_APP_THREAD; ++k) {
+      struct ibv_ah_attr ahAttr;
+      std::cout << remoteMeta->dpuTh[i].lid << "lid" << std::endl;
+      fillAhAttr(&ahAttr, 10001, remoteMeta->dpuTh[i].gid,
+                &thCon[k]->ctx);
+      info.appToDpuAh[k][i] = ibv_create_ah(thCon[k]->ctx.pd, &ahAttr);
+
+      assert(info.appToDpuAh[k][i]);
+    }
+  }
+  std::cout << "connect dpu ok" << std::endl;
+
 }
 
 void DSMKeeper::initRouteRule() {
@@ -154,7 +172,7 @@ void DSMKeeper::barrier(const std::string &barrierKey) {
   memFetchAndAdd(key.c_str(), key.size());
   while (true) {
     uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
-    if (v == this->getServerNR()) {
+    if (v == this->maxCompute) {
       return;
     }
   }
@@ -167,7 +185,7 @@ uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value) {
   memSet(key.c_str(), key.size(), (char *)&value, sizeof(value));
 
   uint64_t ret = 0;
-  for (int i = 1; i < this->getServerNR(); ++i) {
+  for (int i = 1; i < this->maxCompute; ++i) {
     key = key_prefix + std::to_string(i);
     ret += *(uint64_t *)memGet(key.c_str(), key.size());
   }

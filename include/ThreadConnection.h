@@ -3,7 +3,7 @@
 
 #include "Common.h"
 #include "RawMessageConnection.h"
-
+#include "DpuConnection.h"
 struct RemoteConnection;
 
 // app thread
@@ -16,6 +16,11 @@ struct ThreadConnection {
   ibv_cq *rpc_cq;
 
   RawMessageConnection *message;
+
+  ibv_cq *cq2dpu;
+  DpuConnection *dpuConnect;
+
+
 
   ibv_qp **data[NR_DIRECTORY];
 

@@ -41,6 +41,9 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
       createQueuePair(&data2app[i][k], IBV_QPT_RC, cq, &ctx);
     }
   }
+  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+    createQueuePair(&data2dpu[i], IBV_QPT_RC, cq, &ctx);;
+  }
 }
 
 void DirectoryConnection::sendMessage2App(RawMessage *m, uint16_t node_id,

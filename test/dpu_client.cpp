@@ -1,6 +1,7 @@
 #include "Timer.h"
 #include "Tree.h"
 #include "zipf.h"
+#include "DpuProxy.h"
 
 #include <city.h>
 #include <stdlib.h>
@@ -234,25 +235,24 @@ int main(int argc, char *argv[]) {
 
   DSMConfig config;
   config.machineNR = kNodeCount;
-  config.isMemoryNode = true;
-  dsm = DSM::getInstance(config);
+  dsm = DpuProxy::getInstance(config);
 
   dsm->registerThread();
   tree = new Tree(dsm);
 
-  if (dsm->getMyNodeID() == 0) {
-    for (uint64_t i = 1; i < 10; ++i) {
-      tree->insert(to_key(i), i * 2);
-    }
-  }
+  // if (dsm->getMyNodeID() == 0) {
+  //   for (uint64_t i = 1; i < 10; ++i) {
+  //     tree->insert(to_key(i), i * 2);
+  //   }
+  // }
 
-  dsm->barrier("benchmark");
-  dsm->resetThread();
-  dsm->barrier("warm_finish");
-  std::signal(SIGINT, signalHandler);
-  while(true) {
-    sleep(10000);
-  }
+  // dsm->barrier("benchmark");
+  // dsm->resetThread();
+  // dsm->barrier("warm_finish");
+  // std::signal(SIGINT, signalHandler);
+  // while(true) {
+  //   sleep(10000);
+  // }
   // for (int i = 0; i < kThreadCount; i++) {
   //   th[i] = std::thread(thread_run, i);
   // }

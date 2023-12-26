@@ -15,85 +15,41 @@ thread_local RdmaBuffer DSM::rbuf[define::kMaxCoro];
 thread_local uint64_t DSM::thread_tag = 0;
 
 DSM *DSM::getInstance(const DSMConfig &conf) {
-  static DSM dsm(conf);
-  return &dsm;
-  // static DSM *dsm = nullptr;
-  // static WRLock lock;
+  static DSM *dsm = nullptr;
+  static WRLock lock;
 
-  // lock.wLock();
-  // if (!dsm) {
-  //   dsm = new DSM(conf);
-  // } else {
-  // }
-  // lock.wUnlock();
+  lock.wLock();
+  if (!dsm) {
+    dsm = new DSM(conf);
+    dsm->init();
+  } else {
+  }
+  lock.wUnlock();
 
-  // return dsm;
+  return dsm;
 }
 
 DSM::DSM(const DSMConfig &conf)
-    : conf(conf), appID(0), cache(conf.cacheConfig) {
+    : conf(conf), appID(0), cache(conf.cacheConfig) { }
 
+void DSM::init() {
+  remoteInfo = new RemoteConnection[conf.memoryNR];
+  
+  Debug::notifyInfo("number of computeNode: %d, number of memoryNode, %d", conf.machineNR, conf.memoryNR);
 
-  remoteInfo = new RemoteConnection[conf.machineNR];
-  if (conf.isMemoryNode) {
-    baseAddr = (uint64_t)hugePageAlloc(conf.dsmSize * define::GB);
-    Debug::notifyInfo("shared memory size: %dGB, 0x%lx", conf.dsmSize, baseAddr);
-    Debug::notifyInfo("cache size: %dGB", conf.cacheConfig.cacheSize);
+  
 
-    // warmup
-    // memset((char *)baseAddr, 0, conf.dsmSize * define::GB);
-    for (uint64_t i = baseAddr; i < baseAddr + conf.dsmSize * define::GB;
-        i += 2 * define::MB) {
-      *(char *)i = 0;
-    }
-
-    for (int i = 0; i < NR_DIRECTORY; ++i) {
-      dirCon[i] =
-          new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
-                                  conf.machineNR, remoteInfo, true);
-    }
-    // clear up first chunk
-    memset((char *)baseAddr, 0, define::kChunkSize);
-  } else {
-    baseAddr = (uint64_t)malloc(64);
-    for (int i = 0; i < NR_DIRECTORY; ++i) {
-      dirCon[i] =
-          new DirectoryConnection(i, (void *)baseAddr, 64,
-                                  conf.machineNR, remoteInfo, false);
-    }
-    
+  for (int i = 0; i < MAX_APP_THREAD; ++i) {
+    thCon[i] =
+        new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
+                            conf.memoryNR, remoteInfo);
   }
-
-  //initRDMAConnection();
-  {
-    Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
-
-    
-
-    for (int i = 0; i < MAX_APP_THREAD; ++i) {
-      thCon[i] =
-          new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
-                              conf.machineNR, remoteInfo);
-    }
-
-    
-
-  }
-  
-  
-  
-
-  keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR);
+  keeper = new DSMKeeper(thCon, remoteInfo, conf.memoryNR, conf.machineNR);
 
   myNodeID = keeper->getMyNodeID();
 
-  Debug::notifyInfo("number of threads on memory node: %d", NR_DIRECTORY);
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    dirAgent[i] =
-        new Directory(dirCon[i], remoteInfo, conf.machineNR, i, myNodeID);
-  }
-
-  keeper->barrier("DSM-init");
+  auto t =  new std::thread(&DSM::catch_root_change);
+  init_socket();
 }
 
 DSM::~DSM() {}
@@ -111,9 +67,6 @@ void DSM::registerThread() {
   iCon = thCon[thread_id];
 
   if (!has_init[thread_id]) {
-    iCon->message->initRecv();
-    iCon->message->initSend();
-
     has_init[thread_id] = true;
   }
 
@@ -124,31 +77,6 @@ void DSM::registerThread() {
   }
 }
 
-void DSM::initRDMAConnection() {
-
-  Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
-
-  remoteInfo = new RemoteConnection[conf.machineNR];
-
-  for (int i = 0; i < MAX_APP_THREAD; ++i) {
-    thCon[i] =
-        new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
-                             conf.machineNR, remoteInfo);
-  }
-
-  if (conf.isMemoryNode) {
-    for (int i = 0; i < NR_DIRECTORY; ++i) {
-    dirCon[i] =
-        new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
-                                conf.machineNR, remoteInfo, true);
-    }
-  }
-  
-
-  keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR);
-
-  myNodeID = keeper->getMyNodeID();
-}
 
 void DSM::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
                CoroContext *ctx) {
@@ -562,4 +490,91 @@ bool DSM::poll_rdma_cq_once(uint64_t &wr_id) {
   wr_id = wc.wr_id;
 
   return res == 1;
+}
+#include <iostream>
+#include <cstring>
+#include <arpa/inet.h>
+#include <unistd.h>
+extern GlobalAddress g_root_ptr;
+extern int g_root_level;
+extern bool enable_cache;
+void DSM::catch_root_change() {
+  std::cout << "start catch broadcast" << std::endl;
+  int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSocket == -1) {
+        std::cerr << "Error creating socket\n";
+        exit(-1);
+    }
+
+    int broadcastEnable = 1;
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+        std::cerr << "Error setting socket options\n";
+        close(udpSocket);
+        exit(-1);
+    }
+
+    struct sockaddr_in serverAddress, clientAddress;
+    std::memset(&serverAddress, 0, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(12345); // Port number
+    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    int val = 1;
+    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
+    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
+    if (bind(udpSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
+        std::cerr << "Error binding socket\n";
+        close(udpSocket);
+        exit(-1);
+    }
+
+    char buffer[1024];
+    while (true) {
+      
+      socklen_t clientAddressLength = sizeof(clientAddress);
+      ssize_t receivedBytes = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddress, &clientAddressLength);
+      if (receivedBytes == -1 || receivedBytes != sizeof(RawMessage)) {
+          std::cerr << "Error receiving message\n";
+          close(udpSocket);
+          exit(-1);
+
+      }
+      RawMessage* m = (RawMessage*)buffer;
+      if (g_root_level < m->level) {
+          g_root_ptr = m->addr;
+          g_root_level = m->level;
+          if (g_root_level >= 3) {
+            enable_cache = true;
+          }
+          std::cout << "Received change root to" << g_root_ptr << std::endl;
+      }
+    } 
+}
+
+
+void DSM::init_socket() {
+  udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSocket == -1) {
+        std::cerr << "Error creating socket\n";
+        exit(-1);
+    }
+
+    int broadcastEnable = 1;
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+        std::cerr << "Error setting socket options\n";
+        close(udpSocket);
+        exit(-1);
+    }
+    std::memset(&serverAddress, 0, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(12345); // Port number
+    serverAddress.sin_addr.s_addr = INADDR_BROADCAST; // Broadcast address
+}
+void DSM::broadcast_new_root_to_client(const RawMessage &m) {
+    if (sendto(udpSocket, &m, sizeof(m), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
+        std::cerr << "Error sending message\n";
+        close(udpSocket);
+        exit(-1);
+    }
+    std::cout << "brocast new root" << std::endl;
+
 }

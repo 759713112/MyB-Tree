@@ -53,11 +53,11 @@ private:
   std::vector<std::string> serverList;
 
   std::string setKey(uint16_t remoteID) {
-    return std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
+    return "server" + std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
   }
 
   std::string getKey(uint16_t remoteID) {
-    return std::to_string(remoteID) + "-" + std::to_string(getMyNodeID());
+    return "compute" + std::to_string(remoteID) + "-" + std::to_string(getMyNodeID());
   }
 
   void initLocalMeta();
@@ -70,25 +70,11 @@ private:
 
 protected:
   virtual bool connectNode(uint16_t remoteID) override;
+  void connectDpu();
 
 public:
   DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon,
-            uint32_t maxServer = 12)
-      : Keeper(maxServer), dirCon(dirCon),
-        remoteCon(remoteCon) {
-
-    initLocalMeta();
-
-    if (!connectMemcached()) {
-      return;
-    }
-    serverEnter();
-
-    serverConnect();
-    connectMySelf();
-
-    initRouteRule();
-  }
+            uint32_t maxCompute = 12);
 
   ~DSMemoryKeeper() { disconnectMemcached(); }
   void barrier(const std::string &barrierKey);

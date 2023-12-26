@@ -17,6 +17,7 @@ const int kCoroCnt = 3;
 
 int kReadRatio;
 int kThreadCount;
+int kMemoryNodeCount;
 int kNodeCount;
 uint64_t kKeySpace = 64 * define::MB;
 double kWarmRatio = 0.8;
@@ -165,16 +166,17 @@ void thread_run(int id) {
 }
 
 void parse_args(int argc, char *argv[]) {
-  if (argc != 4) {
-    printf("Usage: ./benchmark kNodeCount kReadRatio kThreadCount\n");
+  if (argc != 5) {
+    printf("Usage: ./benchmark kNodeCount  kMemoryNodeCount kReadRatio kThreadCount\n");
     exit(-1);
   }
 
   kNodeCount = atoi(argv[1]);
-  kReadRatio = atoi(argv[2]);
-  kThreadCount = atoi(argv[3]);
+  kMemoryNodeCount = atoi(argv[2]);
+  kReadRatio = atoi(argv[3]);
+  kThreadCount = atoi(argv[4]);
 
-  printf("kNodeCount %d, kReadRatio %d, kThreadCount %d\n", kNodeCount,
+  printf("kNodeCount %d, kMemoryNodeCount, kReadRatio %d, kThreadCount %d\n", kNodeCount, kMemoryNodeCount,
          kReadRatio, kThreadCount);
 }
 
@@ -228,6 +230,7 @@ int main(int argc, char *argv[]) {
 
   DSMConfig config;
   config.machineNR = kNodeCount;
+  config.memoryNR = kMemoryNodeCount;
   dsm = DSM::getInstance(config);
 
   dsm->registerThread();

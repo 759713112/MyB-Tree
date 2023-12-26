@@ -2,6 +2,7 @@
 
 #include "Connection.h"
 
+#include <iostream>
 ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
                                    uint64_t cacheSize, uint32_t machineNR,
                                    RemoteConnection *remoteInfo)
@@ -13,6 +14,12 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
   rpc_cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
 
   message = new RawMessageConnection(ctx, rpc_cq, APP_MESSAGE_NR);
+  message->initRecv();
+  
+  cq2dpu = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
+  dpuConnect = new DpuConnection(ctx, cq, APP_MESSAGE_NR);
+  dpuConnect->initRecv();
+  dpuConnect->initSend();
 
   this->cachePool = cachePool;
   cacheMR = createMemoryRegion((uint64_t)cachePool, cacheSize, &ctx);
@@ -29,7 +36,6 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
 
 void ThreadConnection::sendMessage2Dir(RawMessage *m, uint16_t node_id,
                                        uint16_t dir_id) {
-  
   message->sendRawMessage(m, remoteInfo[node_id].dirMessageQPN[dir_id],
                           remoteInfo[node_id].appToDirAh[threadID][dir_id]);
 }

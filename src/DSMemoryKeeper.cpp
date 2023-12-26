@@ -1,15 +1,36 @@
 #include "DSMemoryKeeper.h"
 
 #include "Connection.h"
+#include <iostream>
 
 const char *DSMemoryKeeper::OK = "OK";
 const char *DSMemoryKeeper::ServerPrefix = "SPre";
+
+
+DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon,
+            uint32_t maxCompute)
+      : Keeper(maxCompute), dirCon(dirCon),
+        remoteCon(remoteCon) {
+
+    initLocalMeta();
+
+    if (!connectMemcached()) {
+      return;
+    }
+    serverEnter();
+    
+    connectDpu();
+    serverConnect();
+
+    initRouteRule();
+}
 
 void DSMemoryKeeper::initLocalMeta() {
   localMeta.dsmBase = (uint64_t)dirCon[0]->dsmPool;
   localMeta.lockBase = (uint64_t)dirCon[0]->lockPool;
 
   // per thread DIR
+  std::cout << dirCon[0]->ctx.lid << "lid" << std::endl;
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     localMeta.dirTh[i].lid = dirCon[i]->ctx.lid;
     localMeta.dirTh[i].rKey = dirCon[i]->dsmMR->rkey;
@@ -38,6 +59,38 @@ bool DSMemoryKeeper::connectNode(uint16_t remoteID) {
   return true;
 }
 
+void DSMemoryKeeper::connectDpu() {
+
+  for (int i = 0; i < NR_DIRECTORY; ++i) {
+    auto &c = dirCon[i];
+
+    for (int k = 0; k < MAX_APP_THREAD; ++k) {
+      localMeta.dirRcQpn2dpu[k] = c->data2dpu[k]->qp_num;
+    }
+  }
+  std::string setK = "server-dpu" + std::to_string(getMyNodeID());
+  memSet(setK.c_str(), setK.size(), (char *)(&localMeta), sizeof(localMeta));
+
+  std::string getK = "dpu-server" + std::to_string(getMyNodeID());
+  ExchangeMeta *remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
+
+  for (int i = 0; i < NR_DIRECTORY; ++i) {
+    auto &c = dirCon[i];
+
+    for (int k = 0; k < MAX_DPU_THREAD; ++k) {
+      auto &qp = c->data2dpu[k];
+      assert(qp->qp_type == IBV_QPT_RC);
+      modifyQPtoInit(qp, &c->ctx);
+      modifyQPtoRTR(qp, remoteMeta->dpuRcQpn2dir[k],
+                    remoteMeta->dpuTh[k].lid, remoteMeta->dpuTh[k].gid,
+                    &c->ctx);
+      modifyQPtoRTS(qp);
+    }
+  }
+  free(remoteMeta);
+  std::cout << "connect to dpu ok" << std::endl;
+}
+
 void DSMemoryKeeper::setDataToRemote(uint16_t remoteID) {
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     auto &c = dirCon[i];
@@ -55,7 +108,6 @@ void DSMemoryKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMe
 
     for (int k = 0; k < MAX_APP_THREAD; ++k) {
       auto &qp = c->data2app[k][remoteID];
-
       assert(qp->qp_type == IBV_QPT_RC);
       modifyQPtoInit(qp, &c->ctx);
       modifyQPtoRTR(qp, remoteMeta->appRcQpn2dir[k][i],
@@ -68,7 +120,7 @@ void DSMemoryKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMe
 
   auto &info = remoteCon[remoteID];
   // info.dsmBase = remoteMeta->dsmBase;
-  info.cacheBase = remoteMeta->cacheBase;
+  // info.cacheBase = remoteMeta->cacheBase;
   // info.lockBase = remoteMeta->lockBase;
 
   // for (int i = 0; i < NR_DIRECTORY; ++i) {

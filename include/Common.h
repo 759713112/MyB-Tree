@@ -39,6 +39,7 @@
 
 // { app thread
 #define MAX_APP_THREAD 1
+#define MAX_DPU_THREAD 1
 
 #define APP_MESSAGE_NR 96
 

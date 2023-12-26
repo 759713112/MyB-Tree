@@ -33,7 +33,15 @@ struct ExchangeMeta {
 
   uint32_t dirRcQpn2app[NR_DIRECTORY][MAX_APP_THREAD];
 
-  // uint32_t app2dpu[MAX_APP_THREAD];
+
+  ExPerThread dpuTh[MAX_DPU_THREAD];
+  uint32_t dpuRcQpn2dir[MAX_DPU_THREAD];
+  uint32_t dpuUdQpn2app[MAX_DPU_THREAD];
+
+  uint32_t dirRcQpn2dpu[MAX_DPU_THREAD];
+
+  uint32_t appUdQpn2dpu[MAX_APP_THREAD];
+  // uint32_t app2dpu[MAX_DPU_THREAD];
   // uint32_t dpu2app[]
 
 }__attribute__((packed));
@@ -45,50 +53,37 @@ private:
   static const char *ServerPrefix;
 
   ThreadConnection **thCon;
-  DirectoryConnection **dirCon;
-  RemoteConnection *remoteCon;
+
 
   ExchangeMeta localMeta;
+  uint32_t maxCompute;
+  RemoteConnection *remoteCon;
 
   std::vector<std::string> serverList;
 
   std::string setKey(uint16_t remoteID) {
-    return std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
+    return "compute" + std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
   }
 
   std::string getKey(uint16_t remoteID) {
-    return std::to_string(remoteID) + "-" + std::to_string(getMyNodeID());
+    return "server" + std::to_string(remoteID) + "-" + std::to_string(getMyNodeID());
   }
 
   void initLocalMeta();
 
-  void connectMySelf();
   void initRouteRule();
 
   void setDataToRemote(uint16_t remoteID);
   void setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta);
+  void setDataFromRemoteDpu(uint16_t remoteID, ExchangeMeta *remoteMeta);
 
 protected:
   virtual bool connectNode(uint16_t remoteID) override;
 
 public:
-  DSMKeeper(ThreadConnection **thCon, DirectoryConnection **dirCon, RemoteConnection *remoteCon,
-            uint32_t maxServer = 12)
-      : Keeper(maxServer), thCon(thCon), dirCon(dirCon),
-        remoteCon(remoteCon) {
+  DSMKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon,
+            uint32_t maxServer = 12, uint32_t maxCompute = 12);
 
-    initLocalMeta();
-
-    if (!connectMemcached()) {
-      return;
-    }
-    serverEnter();
-
-    serverConnect();
-    connectMySelf();
-
-    initRouteRule();
-  }
 
   ~DSMKeeper() { disconnectMemcached(); }
   void barrier(const std::string &barrierKey);

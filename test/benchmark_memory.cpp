@@ -20,16 +20,16 @@ DSMemory *dsm;
 
 
 int kNodeCount;
-int kMemoryCount;
+int kComputeCount;
 void parse_args(int argc, char *argv[]) {
   if (argc != 3) {
-    printf("Usage: ./benchmark_memory kNodeCount kMemoryCount\n");
+    printf("Usage: ./benchmark_memory kNodeCount kComputeCount\n");
     exit(-1);
   }
 
   kNodeCount = atoi(argv[1]);
-  kMemoryCount = atoi(argv[2]);
-  printf("kNodeCount %d, kMemoryCount %d\n", kNodeCount, kMemoryCount);
+  kComputeCount = atoi(argv[2]);
+  printf("kNodeCount %d, kComputeCount %d\n", kNodeCount, kComputeCount);
 }
 
 
@@ -44,7 +44,8 @@ int main(int argc, char *argv[]) {
   parse_args(argc, argv);
 
   DSMConfig config;
-  config.machineNR = kNodeCount;
+  config.machineNR = kComputeCount;
+  // config.memoryNR = kComputeCount;
   config.isMemoryNode = true;
   dsm = DSMemory::getInstance(config);
 
@@ -56,9 +57,8 @@ int main(int argc, char *argv[]) {
   //   }
   // }
 
-  dsm->barrier("benchmark");
+  // dsm->barrier("benchmark");
 
-  dsm->barrier("warm_finish");
   std::signal(SIGINT, signalHandler);
   while(true) {
     sleep(10000);

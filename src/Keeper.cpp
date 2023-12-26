@@ -15,6 +15,8 @@ std::string trim(const std::string &s) {
 }
 
 const char *Keeper::SERVER_NUM_KEY = "serverNum";
+const char *Keeper::COMPUTE_NUM_KEY = "computeNum";
+const char *Keeper::DPU_NUM_KEY = "dpuNum";
 
 Keeper::Keeper(uint32_t maxServer)
     : maxServer(maxServer), curServer(0), memc(NULL) {}
@@ -29,7 +31,7 @@ bool Keeper::connectMemcached() {
   memcached_server_st *servers = NULL;
   memcached_return rc;
 
-  std::ifstream conf("../memcached.conf");
+  std::ifstream conf("../memcached.conf"); 
 
   if (!conf) {
     fprintf(stderr, "can't open memcached.conf\n");
@@ -76,9 +78,49 @@ void Keeper::serverEnter() {
       myNodeID = serverNum - 1;
 
       printf("I am server %d\n", myNodeID);
-      return;
+      return; 
     }
     fprintf(stderr, "Server %d Counld't incr value and get ID: %s, retry...\n",
+            myNodeID, memcached_strerror(memc, rc));
+    usleep(10000);
+  }
+}
+
+void Keeper::computeEnter() {
+  memcached_return rc;
+  uint64_t computeNum;
+
+  while (true) {
+    rc = memcached_increment(memc, COMPUTE_NUM_KEY, strlen(COMPUTE_NUM_KEY), 1,
+                             &computeNum);
+    if (rc == MEMCACHED_SUCCESS) {
+
+      myNodeID = computeNum - 1;
+
+      printf("I am conmpute %d\n", myNodeID);
+      return;
+    }
+    fprintf(stderr, "Compute %d Counld't incr value and get ID: %s, retry...\n",
+            myNodeID, memcached_strerror(memc, rc));
+    usleep(10000);
+  }
+}
+
+void Keeper::dpuEnter() {
+  memcached_return rc;
+  uint64_t dpuNum;
+
+  while (true) {
+    rc = memcached_increment(memc, DPU_NUM_KEY, strlen(DPU_NUM_KEY), 1,
+                             &dpuNum);
+    if (rc == MEMCACHED_SUCCESS) {
+
+      myNodeID = dpuNum - 1;
+
+      printf("I am dpu %d\n", myNodeID);
+      return;
+    }
+    fprintf(stderr, "Dpu %d Counld't incr value and get ID: %s, retry...\n",
             myNodeID, memcached_strerror(memc, rc));
     usleep(10000);
   }
@@ -91,10 +133,36 @@ void Keeper::serverConnect() {
   memcached_return rc;
 
   while (curServer < maxServer) {
+    char *serverNumStr = memcached_get(memc, COMPUTE_NUM_KEY, strlen(COMPUTE_NUM_KEY),
+                                       &l, &flags, &rc);
+    if (rc != MEMCACHED_SUCCESS) {
+      fprintf(stderr, "compute %d Counld't get ComputeNum: %s, retry\n", myNodeID,
+              memcached_strerror(memc, rc));
+      continue;
+    }
+    uint32_t computeNum = atoi(serverNumStr);
+    free(serverNumStr);
+
+    // /connect server K
+    for (size_t k = curServer; k < computeNum; ++k) {
+      connectNode(k);
+      printf("I connect compute %zu\n", k);
+    }
+    curServer = computeNum;
+  }
+}
+
+void Keeper::computeConnect() {
+
+  size_t l;
+  uint32_t flags;
+  memcached_return rc;
+
+  while (curServer < maxServer) {
     char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
                                        strlen(SERVER_NUM_KEY), &l, &flags, &rc);
     if (rc != MEMCACHED_SUCCESS) {
-      fprintf(stderr, "Server %d Counld't get serverNum: %s, retry\n", myNodeID,
+      fprintf(stderr, "compute %d Counld't get serverNum: %s, retry\n", myNodeID,
               memcached_strerror(memc, rc));
       continue;
     }
@@ -103,10 +171,8 @@ void Keeper::serverConnect() {
 
     // /connect server K
     for (size_t k = curServer; k < serverNum; ++k) {
-      if (k != myNodeID) {
-        connectNode(k);
-        printf("I connect server %zu\n", k);
-      }
+      connectNode(k);
+      printf("I connect server %zu\n", k);        
     }
     curServer = serverNum;
   }

@@ -21,7 +21,7 @@
 class Keeper {
 
 private:
-  static const char *SERVER_NUM_KEY;
+
 
   uint32_t maxServer;
   uint16_t curServer;
@@ -35,11 +35,17 @@ protected:
   bool connectMemcached();
   bool disconnectMemcached();
   void serverConnect();
+  void computeConnect();
   void serverEnter();
+  void computeEnter();
+  void dpuEnter();
   virtual bool connectNode(uint16_t remoteID) = 0;
 
 
 public:
+  static const char *SERVER_NUM_KEY;
+  static const char *COMPUTE_NUM_KEY;
+  static const char *DPU_NUM_KEY;
   Keeper(uint32_t maxServer = 12);
   ~Keeper();
 

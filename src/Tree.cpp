@@ -9,6 +9,9 @@
 #include <queue>
 #include <utility>
 #include <vector>
+#include <cstring>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 bool enter_debug = false;
 
@@ -118,9 +121,11 @@ void Tree::broadcast_new_root(GlobalAddress new_root_addr, int root_level) {
   m.type = RpcType::NEW_ROOT;
   m.addr = new_root_addr;
   m.level = root_level;
-  for (int i = 0; i < dsm->getClusterSize(); ++i) {
+  // for (int i = 0; i < dsm->getClusterSize(); ++i) {
+  for (int i = 0; i < 1; ++i) {
     dsm->rpc_call_dir(m, i);
   }
+  dsm->broadcast_new_root_to_client(m);
 }
 
 bool Tree::update_new_root(GlobalAddress left, const Key &k,

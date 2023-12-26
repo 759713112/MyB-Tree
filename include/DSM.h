@@ -17,8 +17,10 @@ class Directory;
 class DSM {
 
 public:
+  virtual void init();
+
   // obtain netowrk resources for a thread
-  void registerThread();
+  virtual void registerThread();
 
   // clear the network resources for all threads
   void resetThread() { appID.store(0); }
@@ -137,11 +139,10 @@ public:
     return size;
   }
 
-private:
+protected:
   DSM(const DSMConfig &conf);
   ~DSM();
 
-  void initRDMAConnection();
   void fill_keys_dest(RdmaOpRegion &ror, GlobalAddress addr, bool is_chip);
 
   DSMConfig conf;
@@ -160,10 +161,10 @@ private:
 
   RemoteConnection *remoteInfo;
   ThreadConnection *thCon[MAX_APP_THREAD];
-  DirectoryConnection *dirCon[NR_DIRECTORY];
   DSMKeeper *keeper;
 
-  Directory *dirAgent[NR_DIRECTORY];
+  struct sockaddr_in serverAddress;
+  int udpSocket;
 
 public:
   bool is_register() { return thread_id != -1; }
@@ -193,6 +194,9 @@ public:
     pollWithCQ(iCon->rpc_cq, 1, &wc);
     return (RawMessage *)iCon->message->getMessage();
   }
+  void init_socket();
+  void broadcast_new_root_to_client(const RawMessage &m); 
+  static void catch_root_change(); 
 };
 
 inline GlobalAddress DSM::alloc(size_t size) {

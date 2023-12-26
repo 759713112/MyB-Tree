@@ -1,44 +1,40 @@
 #ifndef __DPU_PROXY_H__
 #define __DPU_PROXY_H__
 
-#define DPU_CONNECTION_NUMS 16
+#include <atomic>
 
-#include <vector>
-#include <thread>
-
-#include "GlobalAddress.h"
+#include "Cache.h"
+#include "Config.h"
 #include "Connection.h"
-#include "DpuProxyConnection.h"
+#include "DSMKeeper.h"
+#include "GlobalAddress.h"
+#include "LocalAllocator.h"
+#include "RdmaBuffer.h"
+#include "DpuConnection.h"
+#include "DSDpuKeeper.h"
+#include "DSM.h"
+class DSMKeeper;
+class Directory;
 
-class Cache {
+class DpuProxy: public DSM {
 
-};
-
-
-
-class DpuProxy {
 public:
-    DpuProxy(uint32_t thread_num, RemoteConnection *remoteInfo);
-    ~DpuProxy();
-    void run(int thread_id);
+  // obtain netowrk resources for a thread
+  virtual void registerThread() override;
+  // clear the network resources for all threads
+  void resetThread() { appID.store(0); }
+
+  static DpuProxy *getInstance(const DSMConfig &conf);
 
 private:
-    void process_request(const Request *req);
+  DpuProxy(const DSMConfig &conf);
+  ~DpuProxy();
 
-private:    
-    std::vector<std::thread> threads;
-    
-    std::vector<ibv_cq*> complete_queues;
-    std::vector<DpuProxyConnection*> dpuProxConnections;  
-    Cache cache;
-    uint32_t machineNR;
-    RemoteConnection *remoteInfo;
-    RdmaContext ctx;
-    ibv_cq *cq;
+  RemoteConnection *computeInfo;
+  ThreadConnection *hostCon[MAX_DPU_THREAD];
+  DpuConnection *dpuCon[MAX_DPU_THREAD];
 
-    static thread_local int thread_id;
+  DSDpuKeeper *keeper; 
 
 };
-
-
-#endif
+#endif /* __DPU_PROXY_H__ */
