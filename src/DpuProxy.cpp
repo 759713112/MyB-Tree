@@ -71,7 +71,7 @@ void DpuProxy::rpc_call_dir(const RawMessage &m, uint16_t node_id,
     auto buffer = (RawMessage *)iCon->message->getSendPool();
 
     memcpy(buffer, &m, sizeof(RawMessage));
-    buffer->node_id = myNodeID;
+    buffer->node_id = NODE_ID_FOR_DPU;
     buffer->app_id = thread_id;
 
     iCon->sendMessage2Dir(buffer, node_id, dir_id);
