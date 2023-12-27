@@ -19,11 +19,23 @@ const char *Keeper::COMPUTE_NUM_KEY = "computeNum";
 const char *Keeper::DPU_NUM_KEY = "dpuNum";
 
 Keeper::Keeper(uint32_t maxServer)
-    : maxServer(maxServer), curServer(0), memc(NULL) {}
+    : maxServer(maxServer), curServer(0), memc(nullptr) {}
+
+void Keeper::init() {
+    initLocalMeta();
+
+    if (!connectMemcached()) {
+      return;
+    }
+    enter();
+    //connect to host
+    connect();
+
+    // initRouteRule();
+}
 
 Keeper::~Keeper() {
   //   listener.detach();
-
   disconnectMemcached();
 }
 
@@ -66,118 +78,6 @@ bool Keeper::disconnectMemcached() {
   return true;
 }
 
-void Keeper::serverEnter() {
-  memcached_return rc;
-  uint64_t serverNum;
-
-  while (true) {
-    rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
-                             &serverNum);
-    if (rc == MEMCACHED_SUCCESS) {
-
-      myNodeID = serverNum - 1;
-
-      printf("I am server %d\n", myNodeID);
-      return; 
-    }
-    fprintf(stderr, "Server %d Counld't incr value and get ID: %s, retry...\n",
-            myNodeID, memcached_strerror(memc, rc));
-    usleep(10000);
-  }
-}
-
-void Keeper::computeEnter() {
-  memcached_return rc;
-  uint64_t computeNum;
-
-  while (true) {
-    rc = memcached_increment(memc, COMPUTE_NUM_KEY, strlen(COMPUTE_NUM_KEY), 1,
-                             &computeNum);
-    if (rc == MEMCACHED_SUCCESS) {
-
-      myNodeID = computeNum - 1;
-
-      printf("I am conmpute %d\n", myNodeID);
-      return;
-    }
-    fprintf(stderr, "Compute %d Counld't incr value and get ID: %s, retry...\n",
-            myNodeID, memcached_strerror(memc, rc));
-    usleep(10000);
-  }
-}
-
-void Keeper::dpuEnter() {
-  memcached_return rc;
-  uint64_t dpuNum;
-
-  while (true) {
-    rc = memcached_increment(memc, DPU_NUM_KEY, strlen(DPU_NUM_KEY), 1,
-                             &dpuNum);
-    if (rc == MEMCACHED_SUCCESS) {
-
-      myNodeID = dpuNum - 1;
-
-      printf("I am dpu %d\n", myNodeID);
-      return;
-    }
-    fprintf(stderr, "Dpu %d Counld't incr value and get ID: %s, retry...\n",
-            myNodeID, memcached_strerror(memc, rc));
-    usleep(10000);
-  }
-}
-
-void Keeper::serverConnect() {
-
-  size_t l;
-  uint32_t flags;
-  memcached_return rc;
-
-  while (curServer < maxServer) {
-    char *serverNumStr = memcached_get(memc, COMPUTE_NUM_KEY, strlen(COMPUTE_NUM_KEY),
-                                       &l, &flags, &rc);
-    if (rc != MEMCACHED_SUCCESS) {
-      fprintf(stderr, "compute %d Counld't get ComputeNum: %s, retry\n", myNodeID,
-              memcached_strerror(memc, rc));
-      continue;
-    }
-    uint32_t computeNum = atoi(serverNumStr);
-    free(serverNumStr);
-
-    // /connect server K
-    for (size_t k = curServer; k < computeNum; ++k) {
-      connectNode(k);
-      printf("I connect compute %zu\n", k);
-    }
-    curServer = computeNum;
-  }
-}
-
-void Keeper::computeConnect() {
-
-  size_t l;
-  uint32_t flags;
-  memcached_return rc;
-
-  while (curServer < maxServer) {
-    char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
-                                       strlen(SERVER_NUM_KEY), &l, &flags, &rc);
-    if (rc != MEMCACHED_SUCCESS) {
-      fprintf(stderr, "compute %d Counld't get serverNum: %s, retry\n", myNodeID,
-              memcached_strerror(memc, rc));
-      continue;
-    }
-    uint32_t serverNum = atoi(serverNumStr);
-    free(serverNumStr);
-
-    // /connect server K
-    for (size_t k = curServer; k < serverNum; ++k) {
-      connectNode(k);
-      printf("I connect server %zu\n", k);        
-    }
-    curServer = serverNum;
-  }
-}
-
 void Keeper::memSet(const char *key, uint32_t klen, const char *val,
                     uint32_t vlen) {
 
@@ -190,6 +90,13 @@ void Keeper::memSet(const char *key, uint32_t klen, const char *val,
     usleep(400);
   }
 }
+
+// void Keeper::initRouteRule() {
+
+//   std::string k =
+//       std::string(ServerPrefix) + std::to_string(this->getMyNodeID());
+//   memSet(k.c_str(), k.size(), getMyIP().c_str(), getMyIP().size());
+// }
 
 char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
 

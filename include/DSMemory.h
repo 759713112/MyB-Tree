@@ -11,7 +11,7 @@
 #include "LocalAllocator.h"
 #include "RdmaBuffer.h"
 
-class DSMKeeper;
+
 class Directory;
 
 class DSMemory {

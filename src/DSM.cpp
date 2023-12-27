@@ -37,8 +37,6 @@ void DSM::init() {
   
   Debug::notifyInfo("number of computeNode: %d, number of memoryNode, %d", conf.machineNR, conf.memoryNR);
 
-  
-
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     thCon[i] =
         new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,

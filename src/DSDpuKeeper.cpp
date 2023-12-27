@@ -6,29 +6,23 @@ const char *DSDpuKeeper::OK = "OK";
 const char *DSDpuKeeper::ServerPrefix = "SPre";
 
 
-DSDpuKeeper::DSDpuKeeper(ThreadConnection **thCon, DpuConnection **dpuCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
+DSDpuKeeper::DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
         uint32_t maxCompute)
-      : Keeper(maxCompute), thCon(thCon), dpuCon(dpuCon), remoteCon(remoteCon), 
-        computeCon(computeCon), maxCompute(maxCompute) {
+      : Keeper(maxCompute), thCon(thCon), remoteCon(remoteCon),         computeCon(computeCon), maxCompute(maxCompute) {
     initLocalMeta();
 
     if (!connectMemcached()) {
       return;
     }
-    dpuEnter();
-    //connect to host
-
-    connectServer();
-    connectCompute();
-    initRouteRule();
+    enter();
+    connect();
+    // initRouteRule();
 }
 
 void DSDpuKeeper::initLocalMeta() {
   localMeta.cacheBase = (uint64_t)thCon[0]->cachePool;
 
-  // per thread APP
-  std::cout << thCon[0]->ctx.lid << "lid" << std::endl;
-  std::cout << (char *)(&thCon[0]->ctx.gid) << std::endl;
+
   for (int i = 0; i < MAX_DPU_THREAD; ++i) {
     localMeta.dpuTh[i].lid = thCon[i]->ctx.lid;
 
@@ -40,11 +34,34 @@ void DSDpuKeeper::initLocalMeta() {
   }
   for (int i = 0; i < MAX_DPU_THREAD; ++i) {
     localMeta.dpuRcQpn2dir[i] = thCon[i]->data[0][0]->qp_num;
-    localMeta.dpuUdQpn2app[i] = dpuCon[i]->getQPN();
+    localMeta.dpuUdQpn2app[i] = thCon[i]->dpuConnect->getQPN();
   }
 }
 
+void DSDpuKeeper::enter() {
+  memcached_return rc;
+  uint64_t dpuNum;
 
+  while (true) {
+    rc = memcached_increment(memc, DPU_NUM_KEY, strlen(DPU_NUM_KEY), 1,
+                             &dpuNum);
+    if (rc == MEMCACHED_SUCCESS) {
+
+      myNodeID = dpuNum - 1;
+
+      printf("I am dpu %d\n", myNodeID);
+      return;
+    }
+    fprintf(stderr, "Dpu %d Counld't incr value and get ID: %s, retry...\n",
+            myNodeID, memcached_strerror(memc, rc));
+    usleep(10000);
+  }
+}
+
+void DSDpuKeeper::connect() {
+  connectServer();
+  connectCompute();
+}
 
 void DSDpuKeeper::setDataToRemote(uint16_t remoteID) {
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
@@ -116,16 +133,43 @@ void DSDpuKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta)
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     info.dsmRKey[i] = remoteMeta->dirTh[i].rKey;
     info.lockRKey[i] = remoteMeta->dirTh[i].lock_rkey;
+    info.dirMessageQPN[i] = remoteMeta->dirUdQpn[i];
+
+    RdmaContext ctx;
+    
+    createContext(&ctx);
+    RdmaContext ctx2;
+    
+    createContext(&ctx2);
+    uint8_t gid[16];
+        memcpy((char *) gid, (char *)(&ctx.gid),
+           16 * sizeof(uint8_t));
+    struct ibv_ah_attr ahAttr;
+    fillAhAttr(&ahAttr, ctx.lid, gid, &ctx);
+    auto x = ibv_create_ah(ctx.pd, &ahAttr);
+
+    std::cout << &ctx2 << std::endl;
+    if (x == nullptr) {
+        std::cout << "error" << std::endl;
+        exit(-1);
+    }
+    for (int k = 0; k < MAX_DPU_THREAD; ++k) {
+      auto &c = thCon[k];
+
+      //奇怪的bug 先这样
+      c->ctx.port = 1;
+      c->ctx.gidIndex = 3;
+
+      struct ibv_ah_attr ahAttr;
+      fillAhAttr(&ahAttr, remoteMeta->dirTh[i].lid, remoteMeta->dirTh[i].gid,
+                 &c->ctx);
+      info.appToDirAh[k][i] = ibv_create_ah(c->ctx.pd, &ahAttr);
+      assert(info.appToDirAh[k][i]);
+    }
+
   }
-
 }
 
-void DSDpuKeeper::initRouteRule() {
-
-  std::string k =
-      std::string(ServerPrefix) + std::to_string(this->getMyNodeID());
-  memSet(k.c_str(), k.size(), getMyIP().c_str(), getMyIP().size());
-}
 
 void DSDpuKeeper::barrier(const std::string &barrierKey) {
 

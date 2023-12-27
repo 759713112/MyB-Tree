@@ -17,7 +17,7 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
   message->initRecv();
   
   cq2dpu = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
-  dpuConnect = new DpuConnection(ctx, cq, APP_MESSAGE_NR);
+  dpuConnect = new DpuConnection(ctx, cq2dpu, APP_MESSAGE_NR);
   dpuConnect->initRecv();
   dpuConnect->initSend();
 

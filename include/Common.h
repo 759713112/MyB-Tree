@@ -49,6 +49,8 @@
 #define NR_DIRECTORY 1
 
 #define DIR_MESSAGE_NR 128
+
+#define NODE_ID_FOR_DPU 4096
 // }
 
 void bindCore(uint16_t core);

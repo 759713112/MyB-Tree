@@ -18,33 +18,30 @@ class DSDpuKeeper : public Keeper {
 private:
   static const char *OK;
   static const char *ServerPrefix;
-
-  ThreadConnection **thCon;
-  DpuConnection **dpuCon;
   RemoteConnection *remoteCon;
   RemoteConnection *computeCon;
+  ThreadConnection **thCon;
 
   ExchangeMeta localMeta;
   uint32_t maxCompute;
 
   std::vector<std::string> serverList;
 
-
-
-  void initLocalMeta();
+  virtual void initLocalMeta() override;
+  virtual void enter();
+  virtual void connect();
+  virtual bool connectNode(uint16_t remoteID) override { return false; };
 
   void initRouteRule();
 
   void setDataToRemote(uint16_t remoteID);
   void setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta);
-
-protected:
-  virtual bool connectNode(uint16_t remoteID) override { return false; }
+    
   void connectServer();
   void connectCompute();
 
 public:
-  DSDpuKeeper(ThreadConnection **thCon, DpuConnection **dpuCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
+  DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
         uint32_t maxCompute = 12);
 
 

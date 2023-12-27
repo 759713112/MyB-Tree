@@ -13,12 +13,12 @@ DSMKeeper::DSMKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon,
     initLocalMeta();
 
     if (!connectMemcached()) {
+      std::cout << "connect memcached error!" << std::endl;
+      exit(-1);
       return;
     }
-    computeEnter();
-
-    computeConnect();
-
+    enter();
+    connect();
 
     initRouteRule();
 }
@@ -36,6 +36,52 @@ void DSMKeeper::initLocalMeta() {
 
     localMeta.appUdQpn[i] = thCon[i]->message->getQPN();
     localMeta.appUdQpn2dpu[i] = thCon[i]->dpuConnect->getQPN();
+  }
+}
+
+void DSMKeeper::enter() {
+  memcached_return rc;
+  uint64_t computeNum;
+
+  while (true) {
+    rc = memcached_increment(memc, COMPUTE_NUM_KEY, strlen(COMPUTE_NUM_KEY), 1,
+                             &computeNum);
+    if (rc == MEMCACHED_SUCCESS) {
+
+      myNodeID = computeNum - 1;
+
+      printf("I am conmpute %d\n", myNodeID);
+      return;
+    }
+    fprintf(stderr, "Compute %d Counld't incr value and get ID: %s, retry...\n",
+            myNodeID, memcached_strerror(memc, rc));
+    usleep(10000);
+  }
+}
+
+void DSMKeeper::connect() {
+
+  size_t l;
+  uint32_t flags;
+  memcached_return rc;
+
+  while (curServer < maxServer) {
+    char *serverNumStr = memcached_get(memc, SERVER_NUM_KEY,
+                                       strlen(SERVER_NUM_KEY), &l, &flags, &rc);
+    if (rc != MEMCACHED_SUCCESS) {
+      fprintf(stderr, "compute %d Counld't get serverNum: %s, retry\n", myNodeID,
+              memcached_strerror(memc, rc));
+      continue;
+    }
+    uint32_t serverNum = atoi(serverNumStr);
+    free(serverNumStr);
+
+    // /connect server K
+    for (size_t k = curServer; k < serverNum; ++k) {
+      connectNode(k);
+      printf("I connect server %zu\n", k);        
+    }
+    curServer = serverNum;
   }
 }
 
@@ -84,14 +130,6 @@ bool DSMKeeper::connectNode(uint16_t remoteID) {
 }
 
 void DSMKeeper::setDataToRemote(uint16_t remoteID) {
-  // for (int i = 0; i < NR_DIRECTORY; ++i) {
-  //   auto &c = dirCon[i];
-
-  //   for (int k = 0; k < MAX_APP_THREAD; ++k) {
-  //     localMeta.dirRcQpn2app[i][k] = c->data2app[k][remoteID]->qp_num;
-  //   }
-  // }
-
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     auto &c = thCon[i];
     for (int k = 0; k < NR_DIRECTORY; ++k) {
@@ -136,7 +174,6 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
     }
   }
 }
-
 
 void DSMKeeper::setDataFromRemoteDpu(uint16_t remoteID, ExchangeMeta *remoteMeta) {
   auto &info = remoteCon[remoteID];

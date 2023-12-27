@@ -17,10 +17,10 @@ DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *r
     if (!connectMemcached()) {
       return;
     }
-    serverEnter();
+    enter();
     
     connectDpu();
-    serverConnect();
+    connect();
 
     initRouteRule();
 }
@@ -41,6 +41,50 @@ void DSMemoryKeeper::initLocalMeta() {
     localMeta.dirUdQpn[i] = dirCon[i]->message->getQPN();
   }
 
+}
+void DSMemoryKeeper::enter() {
+  memcached_return rc;
+  uint64_t serverNum;
+
+  while (true) {
+    rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
+                             &serverNum);
+    if (rc == MEMCACHED_SUCCESS) {
+
+      myNodeID = serverNum - 1;
+
+      printf("I am server %d\n", myNodeID);
+      return; 
+    }
+    fprintf(stderr, "Server %d Counld't incr value and get ID: %s, retry...\n",
+            myNodeID, memcached_strerror(memc, rc));
+    usleep(10000);
+  }
+}
+
+void DSMemoryKeeper::connect() {
+  size_t l;
+  uint32_t flags;
+  memcached_return rc;
+
+  while (curServer < maxServer) {
+    char *serverNumStr = memcached_get(memc, COMPUTE_NUM_KEY, strlen(COMPUTE_NUM_KEY),
+                                       &l, &flags, &rc);
+    if (rc != MEMCACHED_SUCCESS) {
+      fprintf(stderr, "compute %d Counld't get ComputeNum: %s, retry\n", myNodeID,
+              memcached_strerror(memc, rc));
+      continue;
+    }
+    uint32_t computeNum = atoi(serverNumStr);
+    free(serverNumStr);
+
+    // /connect server K
+    for (size_t k = curServer; k < computeNum; ++k) {
+      connectNode(k);
+      printf("I connect compute %zu\n", k);
+    }
+    curServer = computeNum;
+  }
 }
 
 bool DSMemoryKeeper::connectNode(uint16_t remoteID) {
@@ -119,25 +163,6 @@ void DSMemoryKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMe
 
 
   auto &info = remoteCon[remoteID];
-  // info.dsmBase = remoteMeta->dsmBase;
-  // info.cacheBase = remoteMeta->cacheBase;
-  // info.lockBase = remoteMeta->lockBase;
-
-  // for (int i = 0; i < NR_DIRECTORY; ++i) {
-  //   info.dsmRKey[i] = remoteMeta->dirTh[i].rKey;
-  //   info.lockRKey[i] = remoteMeta->dirTh[i].lock_rkey;
-  //   info.dirMessageQPN[i] = remoteMeta->dirUdQpn[i];
-
-  //   for (int k = 0; k < MAX_APP_THREAD; ++k) {
-  //     struct ibv_ah_attr ahAttr;
-  //     fillAhAttr(&ahAttr, remoteMeta->dirTh[i].lid, remoteMeta->dirTh[i].gid,
-  //                &thCon[k]->ctx);
-  //     info.appToDirAh[k][i] = ibv_create_ah(thCon[k]->ctx.pd, &ahAttr);
-
-  //     assert(info.appToDirAh[k][i]);
-  //   }
-  // }
-
 
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     info.appRKey[i] = remoteMeta->appTh[i].rKey;
@@ -154,10 +179,6 @@ void DSMemoryKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMe
   }
 }
 
-void DSMemoryKeeper::connectMySelf() {
-  setDataToRemote(getMyNodeID());
-  setDataFromRemote(getMyNodeID(), &localMeta);
-}
 
 void DSMemoryKeeper::initRouteRule() {
   std::string k =

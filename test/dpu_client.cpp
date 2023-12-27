@@ -230,7 +230,7 @@ void signalHandler(int signal) {
 }
 
 int main(int argc, char *argv[]) {
-
+  std::cout << "Ctrl+C signal received. Exiting." << std::endl;
   parse_args(argc, argv);
 
   DSMConfig config;

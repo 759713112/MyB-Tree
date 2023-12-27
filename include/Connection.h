@@ -30,6 +30,7 @@ struct RemoteConnection {
     //for dpu 
     uint32_t appRequestQPN[MAX_APP_THREAD];
     ibv_ah *dpuToAppAh[MAX_DPU_THREAD][MAX_APP_THREAD];
+    ibv_ah *dpuToDirAh[MAX_DPU_THREAD][NR_DIRECTORY];
 
 };
 

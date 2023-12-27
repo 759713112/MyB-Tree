@@ -20,19 +20,20 @@ class DpuProxy: public DSM {
 
 public:
   // obtain netowrk resources for a thread
-  virtual void registerThread() override;
+  // virtual void registerThread() override;
   // clear the network resources for all threads
   void resetThread() { appID.store(0); }
 
   static DpuProxy *getInstance(const DSMConfig &conf);
-
+  virtual void rpc_call_dir(const RawMessage &m, uint16_t node_id,
+                    uint16_t dir_id = 0) override;
 private:
   DpuProxy(const DSMConfig &conf);
   ~DpuProxy();
 
   RemoteConnection *computeInfo;
-  ThreadConnection *hostCon[MAX_DPU_THREAD];
-  DpuConnection *dpuCon[MAX_DPU_THREAD];
+  // ThreadConnection *hostCon[MAX_DPU_THREAD];
+  // DpuConnection *dpuCon[MAX_DPU_THREAD];
 
   DSDpuKeeper *keeper; 
 
