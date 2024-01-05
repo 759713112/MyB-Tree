@@ -38,4 +38,6 @@ void ThreadConnection::sendMessage2Dir(RawMessage *m, uint16_t node_id,
                                        uint16_t dir_id) {
   message->sendRawMessage(m, remoteInfo[node_id].dirMessageQPN[dir_id],
                           remoteInfo[node_id].appToDirAh[threadID][dir_id]);
+  // // 需要改
+  // exit(-2);
 }

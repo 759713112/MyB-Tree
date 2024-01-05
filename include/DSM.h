@@ -138,7 +138,11 @@ public:
 
     return size;
   }
+  
 
+  DpuRequest* get_sendpool_to_dpu(size_t size);
+  bool send_request_to_dpu(DpuRequest* r, size_t size);
+  uint64_t poll_dpu_connect_cq(int count = 1);
 protected:
   DSM(const DSMConfig &conf);
   ~DSM();

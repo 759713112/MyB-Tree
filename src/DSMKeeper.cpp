@@ -106,26 +106,7 @@ bool DSMKeeper::connectNode(uint16_t remoteID) {
   getK = "dpu-compute" + std::to_string(remoteID);
   remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
   setDataFromRemoteDpu(remoteID, remoteMeta);
-  DpuRequest* r = (DpuRequest*)thCon[0]->dpuConnect->getSendPool();
-  std::cout << "qpn" << remoteCon[0].appRequestQPN[0] << std::endl;
-  thCon[0]->dpuConnect->sendDpuRequest(r, remoteCon[0].appRequestQPN[0], remoteCon[0].appToDpuAh[0][0]);
-  while (true) {
-    struct ibv_wc wc;
-    pollWithCQ(thCon[0]->cq2dpu, 1, &wc);
 
-    switch (int(wc.opcode)) {
-    case IBV_WC_RECV: // control message
-    {
-
-      auto *m = (DpuResponse *)thCon[0]->dpuConnect->getMessage();
-
-      std::cout << "receive from dpu" << std::endl;
-      break;
-    }
-    default:
-      assert(false);
-    }
-  }
   return true;
 }
 
@@ -178,11 +159,11 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
 void DSMKeeper::setDataFromRemoteDpu(uint16_t remoteID, ExchangeMeta *remoteMeta) {
   auto &info = remoteCon[remoteID];
   for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-    info.appRequestQPN[i] = remoteMeta->dpuUdQpn2app[i];
+    info.dpuRequestQPN[i] = remoteMeta->dpuUdQpn2app[i];
     for (int k = 0; k < MAX_APP_THREAD; ++k) {
       struct ibv_ah_attr ahAttr;
       std::cout << remoteMeta->dpuTh[i].lid << "lid" << std::endl;
-      fillAhAttr(&ahAttr, 10001, remoteMeta->dpuTh[i].gid,
+      fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
                 &thCon[k]->ctx);
       info.appToDpuAh[k][i] = ibv_create_ah(thCon[k]->ctx.pd, &ahAttr);
 

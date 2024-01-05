@@ -8,7 +8,7 @@ const char *DSDpuKeeper::ServerPrefix = "SPre";
 
 DSDpuKeeper::DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
         uint32_t maxCompute)
-      : Keeper(maxCompute), thCon(thCon), remoteCon(remoteCon),         computeCon(computeCon), maxCompute(maxCompute) {
+      : Keeper(maxCompute), thCon(thCon), remoteCon(remoteCon), computeCon(computeCon), maxCompute(maxCompute) {
     initLocalMeta();
 
     if (!connectMemcached()) {
@@ -30,9 +30,7 @@ void DSDpuKeeper::initLocalMeta() {
     memcpy((char *)localMeta.dpuTh[i].gid, (char *)(&thCon[i]->ctx.gid),
            16 * sizeof(uint8_t));
 
-    localMeta.appUdQpn[i] = thCon[i]->message->getQPN();
-  }
-  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+    localMeta.dpuUdQpn2dir[i] = thCon[i]->message->getQPN();
     localMeta.dpuRcQpn2dir[i] = thCon[i]->data[0][0]->qp_num;
     localMeta.dpuUdQpn2app[i] = thCon[i]->dpuConnect->getQPN();
   }
@@ -135,36 +133,19 @@ void DSDpuKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta)
     info.lockRKey[i] = remoteMeta->dirTh[i].lock_rkey;
     info.dirMessageQPN[i] = remoteMeta->dirUdQpn[i];
 
-    RdmaContext ctx;
-    
-    createContext(&ctx);
-    RdmaContext ctx2;
-    
-    createContext(&ctx2);
-    uint8_t gid[16];
-        memcpy((char *) gid, (char *)(&ctx.gid),
-           16 * sizeof(uint8_t));
-    struct ibv_ah_attr ahAttr;
-    fillAhAttr(&ahAttr, ctx.lid, gid, &ctx);
-    auto x = ibv_create_ah(ctx.pd, &ahAttr);
 
-    std::cout << &ctx2 << std::endl;
-    if (x == nullptr) {
-        std::cout << "error" << std::endl;
-        exit(-1);
-    }
     for (int k = 0; k < MAX_DPU_THREAD; ++k) {
       auto &c = thCon[k];
 
-      //奇怪的bug 先这样
-      c->ctx.port = 1;
-      c->ctx.gidIndex = 3;
+      // //奇怪的bug 先这样
+      // c->ctx.port = 1;
+      // c->ctx.gidIndex = 3;
 
       struct ibv_ah_attr ahAttr;
       fillAhAttr(&ahAttr, remoteMeta->dirTh[i].lid, remoteMeta->dirTh[i].gid,
                  &c->ctx);
-      info.appToDirAh[k][i] = ibv_create_ah(c->ctx.pd, &ahAttr);
-      assert(info.appToDirAh[k][i]);
+      info.dpuToDirAh[k][i] = ibv_create_ah(c->ctx.pd, &ahAttr);
+      assert(info.dpuToDirAh[k][i]);
     }
 
   }

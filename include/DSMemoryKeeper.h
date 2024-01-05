@@ -17,7 +17,8 @@ private:
   static const char *ServerPrefix;
 
   DirectoryConnection **dirCon;
-  RemoteConnection *remoteCon;
+  RemoteConnection *remoteCon;   //数组
+  RemoteConnection *dpuConnectInfo; //指针
 
   ExchangeMeta localMeta;
 
@@ -49,7 +50,7 @@ private:
   
 
 public:
-  DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon,
+  DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon, RemoteConnection *dpuConnectInfo,
             uint32_t maxCompute = 12);
 
   ~DSMemoryKeeper() { disconnectMemcached(); }

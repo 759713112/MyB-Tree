@@ -4,8 +4,8 @@
 
 DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
                                          uint64_t dsmSize, uint32_t machineNR,
-                                         RemoteConnection *remoteInfo, bool isMemoryNode)
-    : dirID(dirID), remoteInfo(remoteInfo) {
+                                         RemoteConnection *remoteInfo, RemoteConnection *dpuConnectInfo, bool isMemoryNode)
+    : dirID(dirID), remoteInfo(remoteInfo), dpuConnectInfo(dpuConnectInfo) {
 
   createContext(&ctx);
   cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
@@ -24,12 +24,8 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
   if (dirID == 0) {
     this->lockPool = (void *)define::kLockStartAddr;
     this->lockSize = define::kLockChipMemSize;
-    if (isMemoryNode) {
-      this->lockMR = createMemoryRegionOnChip((uint64_t)this->lockPool,
+    this->lockMR = createMemoryRegionOnChip((uint64_t)this->lockPool,
                                             this->lockSize, &ctx);
-    } else {
-      this->lockMR = new struct ibv_mr();
-    }
     // 
     this->lockLKey = lockMR->lkey;
   }
@@ -42,13 +38,19 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
     }
   }
   for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-    createQueuePair(&data2dpu[i], IBV_QPT_RC, cq, &ctx);;
+    createQueuePair(&data2dpu[i], IBV_QPT_RC, cq, &ctx);
   }
+
 }
 
 void DirectoryConnection::sendMessage2App(RawMessage *m, uint16_t node_id,
                                           uint16_t th_id) {
-  message->sendRawMessage(m, remoteInfo[node_id].appMessageQPN[th_id],
+  if (node_id == NODE_ID_FOR_DPU) {
+    message->sendRawMessage(m, dpuConnectInfo[0].dpuMessageQPN[th_id],
+                          dpuConnectInfo[0].dirToDpuAh[dirID][th_id]);
+  } else {
+    message->sendRawMessage(m, remoteInfo[node_id].appMessageQPN[th_id],
                           remoteInfo[node_id].dirToAppAh[dirID][th_id]);
-  ;
+  }
+  
 }

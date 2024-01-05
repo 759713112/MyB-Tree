@@ -71,6 +71,7 @@ private:
   uint32_t myNodeID;
 
   RemoteConnection *remoteInfo;
+  RemoteConnection *dpuConnectInfo;
   DirectoryConnection *dirCon[NR_DIRECTORY];
   DSMemoryKeeper *keeper;
 

@@ -173,42 +173,13 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, uint64_t mmSize,
 bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
                      ibv_cq *recv_cq, RdmaContext *context,
                      uint32_t qpsMaxDepth, uint32_t maxInlineData) {
-
-  
-  // struct mlx5dv_qp_init_attr dv_init_attr;
-  // struct ibv_qp_init_attr_ex init_attr;
- 
-  // memset(&dv_init_attr, 0, sizeof(dv_init_attr));
-  // memset(&init_attr, 0, sizeof(init_attr));
-  // init_attr.qp_type = IBV_QPT_DRIVER;
-  // init_attr.send_cq = send_cq;
-  // init_attr.recv_cq = recv_cq;
-  // init_attr.pd = context->pd;
-  
-
-  // init_attr.comp_mask |= IBV_QP_INIT_ATTR_SEND_OPS_FLAGS | IBV_QP_INIT_ATTR_PD;
-  // init_attr.send_ops_flags |= IBV_QP_EX_WITH_SEND;
-
-
-  // dv_init_attr.comp_mask |= MLX5DV_QP_INIT_ATTR_MASK_DC |
-  //                           MLX5DV_QP_INIT_ATTR_MASK_QP_CREATE_FLAGS;
-  // dv_init_attr.create_flags |= MLX5DV_QP_CREATE_DISABLE_SCATTER_TO_CQE;
-  // dv_init_attr.dc_init_attr.dc_type = MLX5DV_DCTYPE_DCI;
-  // *qp = mlx5dv_create_qp(context->ctx, &init_attr, &dv_init_attr);
-  // // auto ex_qp = ibv_qp_to_qp_ex(*qp);
-  // // auto dv_qp = mlx5dv_qp_ex_from_ibv_qp_ex(ex_qp);
-  // if (!(*qp)) {
-  //   Debug::notifyError("Failed to create QP");
-  //   Debug::notifyError("Failed to create QP, %s", strerror(errno));
-  //   return false;
-  // }
-  
   struct ibv_qp_init_attr attr;
   memset(&attr, 0, sizeof(attr));
   attr.qp_type = mode;
   attr.sq_sig_all = 0;
   attr.send_cq = send_cq;
   attr.recv_cq = recv_cq;
+
   // if (mode == IBV_QPT_RC) {
   //   attr.comp_mask = IBV_QP_INIT_ATTR_CREATE_FLAGS | IBV_QP_INIT_ATTR_PD;
   //   attr.max_atomic_arg = 32;

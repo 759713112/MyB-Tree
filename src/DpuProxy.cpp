@@ -66,7 +66,7 @@ DpuProxy::~DpuProxy() {}
 // }
 
 void DpuProxy::rpc_call_dir(const RawMessage &m, uint16_t node_id,
-                    uint16_t dir_id = 0) {
+                    uint16_t dir_id) {
 
     auto buffer = (RawMessage *)iCon->message->getSendPool();
 

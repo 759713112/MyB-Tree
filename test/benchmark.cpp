@@ -83,12 +83,46 @@ RequstGen *coro_func(int coro_id, DSM *dsm, int id) {
 Timer bench_timer;
 std::atomic<int64_t> warmup_cnt{0};
 std::atomic_bool ready{false};
+
+
+void thread_run_for_test(int id) {
+  dsm->registerThread();
+  unsigned int seed = rdtsc();
+  struct zipf_gen_state state;
+  mehcached_zipf_init(&state, kKeySpace, zipfan,
+                      (rdtsc() & (0x0000ffffffffffffull)) ^ id);
+
+  Timer timer;
+  while (true) {
+
+    uint64_t dis = mehcached_zipf_next(&state);
+    uint64_t key = to_key(dis);
+    
+    Value v;
+
+    auto r = dsm->get_sendpool_to_dpu(0);
+    r->k = key;
+    r->v = v;
+    if (rand_r(&seed) % 100 < kReadRatio) { // GET
+      r->type = SEARCH;
+
+    } else {
+      r->type = INSERT;
+    }
+    dsm->send_request_to_dpu(r, 0);
+  }
+}
 void thread_run(int id) {
 
   bindCore(id);
 
   dsm->registerThread();
 
+  // while (true) {
+  //   DpuRequest *r = (DpuRequest*)dsm->iCon->dpuConnect->getSendPool();
+  //   dsm->iCon->dpuConnect->sendDpuRequest(r, dsm->iCon->dpuConnect)
+  //   std::cout << "receive" << r->k << std::endl;
+  // }
   uint64_t all_thread = kThreadCount * dsm->getClusterSize();
   uint64_t my_id = kThreadCount * dsm->getMyNodeID() + id;
 
@@ -232,16 +266,16 @@ int main(int argc, char *argv[]) {
   config.machineNR = kNodeCount;
   config.memoryNR = kMemoryNodeCount;
   dsm = DSM::getInstance(config);
-
+    // sleep(100000);
   dsm->registerThread();
   tree = new Tree(dsm);
 
-  if (dsm->getMyNodeID() == 0) {
-    for (uint64_t i = 1; i < 10; ++i) {
-      tree->insert(to_key(i), i * 2);
-    }
-  }
-
+  // if (dsm->getMyNodeID() == 0) {
+  //   for (uint64_t i = 1; i < 10; ++i) {
+  //     tree->insert(to_key(i), i * 2);
+  //   }
+  // }
+  std::cout << "okkkk" << std::endl;
   dsm->barrier("benchmark");
   dsm->resetThread();
 

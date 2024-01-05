@@ -2,7 +2,7 @@
 #include "Common.h"
 
 #include "Connection.h"
-
+#include <iostream>
 GlobalAddress g_root_ptr = GlobalAddress::Null();
 int g_root_level = -1;
 bool enable_cache;
@@ -31,10 +31,10 @@ void Directory::dirThread() {
   Debug::notifyInfo("thread %d in memory nodes runs...\n", dirID);
 
   while (true) {
-    struct ibv_wc wc;
-    pollWithCQ(dCon->cq, 1, &wc);
+    struct ibv_wc wc[10];
+    pollWithCQ(dCon->cq, 1, wc);
 
-    switch (int(wc.opcode)) {
+    switch (int(wc[0].opcode)) {
     case IBV_WC_RECV: // control message
     {
 

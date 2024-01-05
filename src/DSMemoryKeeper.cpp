@@ -7,10 +7,10 @@ const char *DSMemoryKeeper::OK = "OK";
 const char *DSMemoryKeeper::ServerPrefix = "SPre";
 
 
-DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon,
+DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon, RemoteConnection *dpuCon,
             uint32_t maxCompute)
-      : Keeper(maxCompute), dirCon(dirCon),
-        remoteCon(remoteCon) {
+      : Keeper(maxCompute), dirCon(dirCon), 
+        remoteCon(remoteCon), dpuConnectInfo(dpuCon) {
 
     initLocalMeta();
 
@@ -18,9 +18,9 @@ DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *r
       return;
     }
     enter();
-    
-    connectDpu();
     connect();
+    connectDpu();
+
 
     initRouteRule();
 }
@@ -108,7 +108,7 @@ void DSMemoryKeeper::connectDpu() {
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     auto &c = dirCon[i];
 
-    for (int k = 0; k < MAX_APP_THREAD; ++k) {
+    for (int k = 0; k < MAX_DPU_THREAD; ++k) {
       localMeta.dirRcQpn2dpu[k] = c->data2dpu[k]->qp_num;
     }
   }
@@ -130,6 +130,22 @@ void DSMemoryKeeper::connectDpu() {
                     &c->ctx);
       modifyQPtoRTS(qp);
     }
+  }
+  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+    dpuConnectInfo->dpuRKey[i] = remoteMeta->dpuTh[i].rKey;
+    dpuConnectInfo->dpuMessageQPN[i] = remoteMeta->dpuUdQpn2dir[i];
+
+    for (int k = 0; k < NR_DIRECTORY; ++k) {
+      struct ibv_ah_attr ahAttr;
+      fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
+                 &dirCon[k]->ctx);
+          fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
+               &dirCon[k]->ctx);
+      dpuConnectInfo->dirToDpuAh[k][i] = ibv_create_ah(dirCon[k]->ctx.pd, &ahAttr);
+
+      assert(dpuConnectInfo->dirToDpuAh[k][i]);
+    }
+
   }
   free(remoteMeta);
   std::cout << "connect to dpu ok" << std::endl;
@@ -160,7 +176,6 @@ void DSMemoryKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMe
       modifyQPtoRTS(qp);
     }
   }
-
 
   auto &info = remoteCon[remoteID];
 

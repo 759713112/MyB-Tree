@@ -38,7 +38,7 @@ extern uint64_t latency[MAX_APP_THREAD][LATENCY_WINDOWS];
 uint64_t latency_th_all[LATENCY_WINDOWS];
 
 Tree *tree;
-DSM *dsm;
+DpuProxy *dsm;
 
 inline Key to_key(uint64_t k) {
   return (CityHash64((char *)&k, sizeof(k)) + 1) % kKeySpace;
@@ -87,12 +87,30 @@ void thread_run(int id) {
 
   bindCore(id);
 
-  dsm->registerThread();
 
+  dsm->registerThread();
+  // while (true) {
+
+    
+  //   struct ibv_wc wc;
+  //   pollWithCQ(dsm->iCon->cq2dpu, 1, &wc);
+
+  //   switch (int(wc.opcode)) {
+  //   case IBV_WC_RECV: // control message
+  //   {
+  //     DpuRequest *r = (DpuRequest*)dsm->iCon->dpuConnect->getMessage();
+  //     std::cout << "receive" << r->k << std::endl;
+  //     break;
+  //   }
+  //   default:
+  //     assert(false);
+  //   }
+  // }
+ 
   uint64_t all_thread = kThreadCount * dsm->getClusterSize();
   uint64_t my_id = kThreadCount * dsm->getMyNodeID() + id;
 
-  printf("I am thread %ld on compute nodes\n", my_id);
+  printf("I am thread %ld on dpu nodes\n", my_id);
 
   if (id == 0) {
     bench_timer.begin();
@@ -167,13 +185,12 @@ void thread_run(int id) {
 
 void parse_args(int argc, char *argv[]) {
   if (argc != 4) {
-    printf("Usage: ./benchmark kNodeCount kReadRatio kThreadCount\n");
+    printf("Usage: ./benchmark kNodeCount kThreadCount\n");
     exit(-1);
   }
 
   kNodeCount = atoi(argv[1]);
-  kReadRatio = atoi(argv[2]);
-  kThreadCount = atoi(argv[3]);
+  kThreadCount = atoi(argv[2]);
 
   printf("kNodeCount %d, kReadRatio %d, kThreadCount %d\n", kNodeCount,
          kReadRatio, kThreadCount);
@@ -230,79 +247,78 @@ void signalHandler(int signal) {
 }
 
 int main(int argc, char *argv[]) {
-  std::cout << "Ctrl+C signal received. Exiting." << std::endl;
   parse_args(argc, argv);
 
   DSMConfig config;
   config.machineNR = kNodeCount;
   dsm = DpuProxy::getInstance(config);
 
-  dsm->registerThread();
-  tree = new Tree(dsm);
-
-  // if (dsm->getMyNodeID() == 0) {
-  //   for (uint64_t i = 1; i < 10; ++i) {
-  //     tree->insert(to_key(i), i * 2);
-  //   }
-  // }
+  // dsm->registerThread();
+  // dsm->resetThread();
+  // tree = new Tree(dsm);
+  std::cout << "init ok" << std::endl;
+  sleep(100000);
+  if (dsm->getMyNodeID() == 0) {
+    for (uint64_t i = 1; i < 10; ++i) {
+      tree->insert(to_key(i), i * 2);
+    }
+  }
 
   // dsm->barrier("benchmark");
-  // dsm->resetThread();
+  dsm->resetThread();
   // dsm->barrier("warm_finish");
-  // std::signal(SIGINT, signalHandler);
-  // while(true) {
-  //   sleep(10000);
-  // }
-  // for (int i = 0; i < kThreadCount; i++) {
-  //   th[i] = std::thread(thread_run, i);
-  // }
+  std::signal(SIGINT, signalHandler);
 
-  // while (!ready.load())
-  //   ;
+  for (int i = 0; i < kThreadCount; i++) {
+    th[i] = std::thread(thread_run, i);
+  }
 
-  // timespec s, e;
-  // uint64_t pre_tp = 0;
+  while (!ready.load())
+    ;
 
-  // int count = 0;
+  timespec s, e;
+  uint64_t pre_tp = 0;
 
-  // clock_gettime(CLOCK_REALTIME, &s);
-  // while (true) {
+  int count = 0;
 
-  //   sleep(2);
-  //   clock_gettime(CLOCK_REALTIME, &e);
-  //   int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
-  //                      (double)(e.tv_nsec - s.tv_nsec) / 1000;
+  clock_gettime(CLOCK_REALTIME, &s);
+  while (true) {
 
-  //   uint64_t all_tp = 0;
-  //   for (int i = 0; i < kThreadCount; ++i) {
-  //     all_tp += tp[i][0];
-  //   }
-  //   uint64_t cap = all_tp - pre_tp;
-  //   pre_tp = all_tp;
+    sleep(2);
+    clock_gettime(CLOCK_REALTIME, &e);
+    int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
+                       (double)(e.tv_nsec - s.tv_nsec) / 1000;
 
-  //   uint64_t all = 0;
-  //   uint64_t hit = 0;
-  //   for (int i = 0; i < MAX_APP_THREAD; ++i) {
-  //     all += (cache_hit[i][0] + cache_miss[i][0]);
-  //     hit += cache_hit[i][0];
-  //   }
+    uint64_t all_tp = 0;
+    for (int i = 0; i < kThreadCount; ++i) {
+      all_tp += tp[i][0];
+    }
+    uint64_t cap = all_tp - pre_tp;
+    pre_tp = all_tp;
 
-  //   clock_gettime(CLOCK_REALTIME, &s);
+    uint64_t all = 0;
+    uint64_t hit = 0;
+    for (int i = 0; i < MAX_APP_THREAD; ++i) {
+      all += (cache_hit[i][0] + cache_miss[i][0]);
+      hit += cache_hit[i][0];
+    }
 
-  //   if (++count % 3 == 0 && dsm->getMyNodeID() == 0) {
-  //     cal_latency();
-  //   }
+    clock_gettime(CLOCK_REALTIME, &s);
 
-  //   double per_node_tp = cap * 1.0 / microseconds;
-  //   uint64_t cluster_tp = dsm->sum((uint64_t)(per_node_tp * 1000));
+    if (++count % 3 == 0 && dsm->getMyNodeID() == 0) {
+      cal_latency();
+    }
 
-  //   printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
+    double per_node_tp = cap * 1.0 / microseconds;
+    uint64_t cluster_tp = dsm->sum((uint64_t)(per_node_tp * 1000));
 
-  //   if (dsm->getMyNodeID() == 0) {
-  //     printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
-  //     printf("cache hit rate: %lf\n", hit * 1.0 / all);
-  //   }
-  // }
+    printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
+
+    if (dsm->getMyNodeID() == 0) {
+      printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
+      printf("cache hit rate: %lf\n", hit * 1.0 / all);
+    }
+  }
 
   return 0;
 }

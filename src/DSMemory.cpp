@@ -4,7 +4,7 @@
 #include "HugePageAlloc.h"
 
 #include <algorithm>
-
+#include <iostream>
 
 DSMemory *DSMemory::getInstance(const DSMConfig &conf) {
   static DSMemory dsm(conf);
@@ -27,6 +27,8 @@ DSMemory::DSMemory(const DSMConfig &conf)
 
 
   remoteInfo = new RemoteConnection[conf.machineNR];
+  dpuConnectInfo = new RemoteConnection;
+
   baseAddr = (uint64_t)hugePageAlloc(conf.dsmSize * define::GB);
   Debug::notifyInfo("shared memory size: %dGB, 0x%lx", conf.dsmSize, baseAddr);
   Debug::notifyInfo("cache size: %dGB", conf.cacheConfig.cacheSize);
@@ -41,15 +43,14 @@ DSMemory::DSMemory(const DSMConfig &conf)
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     dirCon[i] =
         new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
-                                conf.machineNR, remoteInfo, true);
+                                conf.machineNR, remoteInfo, dpuConnectInfo, true);
   }
   // clear up first chunk
   memset((char *)baseAddr, 0, define::kChunkSize);
 
 
-  //initRDMAConnection();
   
-  keeper = new DSMemoryKeeper(dirCon, remoteInfo, conf.machineNR);
+  keeper = new DSMemoryKeeper(dirCon, remoteInfo, dpuConnectInfo, conf.machineNR);
 
   myNodeID = keeper->getMyNodeID();
 

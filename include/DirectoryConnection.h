@@ -29,9 +29,9 @@ struct DirectoryConnection {
   uint32_t lockLKey;
 
   RemoteConnection *remoteInfo;
-
+  RemoteConnection *dpuConnectInfo;
   DirectoryConnection(uint16_t dirID, void *dsmPool, uint64_t dsmSize,
-                      uint32_t machineNR, RemoteConnection *remoteInfo, bool isMemoryNode);
+                      uint32_t machineNR, RemoteConnection *remoteInfo, RemoteConnection *dpuConnectInfo, bool isMemoryNode);
 
   void sendMessage2App(RawMessage *m, uint16_t node_id, uint16_t th_id);
 };

@@ -46,6 +46,7 @@ struct ExchangeMeta {
   ExPerThread dpuTh[MAX_DPU_THREAD];
   uint32_t dpuRcQpn2dir[MAX_DPU_THREAD];
   uint32_t dpuUdQpn2app[MAX_DPU_THREAD];
+  uint32_t dpuUdQpn2dir[MAX_DPU_THREAD];
 
   uint32_t dirRcQpn2dpu[MAX_DPU_THREAD];
 

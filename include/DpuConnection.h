@@ -7,7 +7,10 @@
 #include <thread>
 
 enum DpuRequestType : uint8_t {
-  AAA,
+  INSERT,
+  SEARCH,
+  DELETE,
+  SCAN,
 };
 
 struct DpuRequest {
@@ -16,17 +19,11 @@ struct DpuRequest {
   uint16_t node_id;
   uint16_t app_id;
 
-  GlobalAddress addr; // for malloc
-  int level;
+  Key k;
+  Value v; // for malloc
 } __attribute__((packed));
 
 struct DpuResponse {
-  DpuRequestType type;
-  
-  uint16_t node_id;
-  uint16_t app_id;
-
-  GlobalAddress addr; // for malloc
   int level;
 } __attribute__((packed));
 
