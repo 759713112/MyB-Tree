@@ -1,11 +1,10 @@
+#include <algorithm>
 
 #include "DSM.h"
 #include "Directory.h"
 #include "HugePageAlloc.h"
-
 #include "DSMKeeper.h"
 
-#include <algorithm>
 
 thread_local int DSM::thread_id = -1;
 thread_local ThreadConnection *DSM::iCon = nullptr;

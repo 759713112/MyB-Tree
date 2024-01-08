@@ -54,6 +54,9 @@ struct ExchangeMeta {
   // uint32_t app2dpu[MAX_DPU_THREAD];
   // uint32_t dpu2app[]
 
+  char dma_export_desc[1024];
+  size_t dma_export_desc_len;
+
 }__attribute__((packed));
 
 class Keeper {
@@ -63,7 +66,7 @@ protected:
   bool disconnectMemcached();
   void initRouteRule();
 
-  virtual void initLocalMeta() = 0;
+  void initLocalMeta() {};
   virtual void connect() = 0;
   virtual void enter() = 0;
   virtual bool connectNode(uint16_t remoteID) = 0;

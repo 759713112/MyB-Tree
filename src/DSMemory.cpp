@@ -6,6 +6,13 @@
 #include <algorithm>
 #include <iostream>
 
+#include <doca_argp.h>
+#include <doca_dev.h>
+extern "C" {
+	#include "dma_common.h"
+	#include "dma_copy_sample.h"
+}
+
 DSMemory *DSMemory::getInstance(const DSMConfig &conf) {
   static DSMemory dsm(conf);
   return &dsm;
@@ -47,10 +54,10 @@ DSMemory::DSMemory(const DSMConfig &conf)
   }
   // clear up first chunk
   memset((char *)baseAddr, 0, define::kChunkSize);
-
+  init_dma_host_args();
 
   
-  keeper = new DSMemoryKeeper(dirCon, remoteInfo, dpuConnectInfo, conf.machineNR);
+  keeper = new DSMemoryKeeper(dirCon, remoteInfo, dpuConnectInfo, conf.machineNR, dma_export_desc, dma_export_desc_len);
 
   myNodeID = keeper->getMyNodeID();
 
@@ -65,30 +72,34 @@ DSMemory::DSMemory(const DSMConfig &conf)
 
 DSMemory::~DSMemory() {}
 
+void DSMemory::init_dma_host_args() {
+	doca_error_t result;
+	int exit_status = EXIT_FAILURE;
 
-// void DSMemory::initRDMAConnection() {
+#ifndef DOCA_ARCH_HOST
+	DOCA_LOG_ERR("Sample can run only on the Host");
+	goto sample_exit;
+#endif
 
-//   Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
+	result = doca_argp_init("doca_dma_copy_host", nullptr);
+	if (result != DOCA_SUCCESS) {
+    Debug::notifyInfo("Failed to init ARGP resources: %s", doca_get_error_string(result));
+		exit(-1);
+	}
+	result = register_dma_params(true);
+	if (result != DOCA_SUCCESS) {
+    Debug::notifyInfo("Failed to register DMA sample parameters: %s", doca_get_error_string(result));
+		exit(-1);
+	}
+	result = doca_argp_start(0, nullptr);
+	if (result != DOCA_SUCCESS) {
+		Debug::notifyInfo("Failed to parse sample input: %s", doca_get_error_string(result));
+		exit(-1);
+	}
 
-//   remoteInfo = new RemoteConnection[conf.machineNR];
-
-//   for (int i = 0; i < MAX_APP_THREAD; ++i) {
-//     thCon[i] =
-//         new ThreadConnection(i, (void *)cache.data, cache.size * define::GB,
-//                              conf.machineNR, remoteInfo);
-//   }
-
-//   if (conf.isMemoryNode) {
-//     for (int i = 0; i < NR_DIRECTORY; ++i) {
-//     dirCon[i] =
-//         new DirectoryConnection(i, (void *)baseAddr, conf.dsmSize * define::GB,
-//                                 conf.machineNR, remoteInfo, true);
-//     }
-//   }
-  
-
-//   keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR);
-
-//   myNodeID = keeper->getMyNodeID();
-// }
-
+	result = dma_copy_host(DMA_PCIE_ADDR, (void*)this->baseAddr, conf.dsmSize * define::GB, &dma_export_desc, &dma_export_desc_len);
+	if (result != DOCA_SUCCESS) {
+		Debug::notifyInfo("dma_copy_host() encountered an error: %s", doca_get_error_string(result));
+		exit(-1);
+	}
+}

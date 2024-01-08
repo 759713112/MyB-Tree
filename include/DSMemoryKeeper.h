@@ -32,7 +32,7 @@ private:
     return "compute" + std::to_string(remoteID) + "-" + std::to_string(getMyNodeID());
   }
 
-  virtual void initLocalMeta() override;
+  void initLocalMeta(const void *dma_export_desc, size_t dma_export_desc_len);
   virtual void enter() override;
   virtual void connect() override;
   virtual bool connectNode(uint16_t remoteID) override;
@@ -43,15 +43,10 @@ private:
   void setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta);
   
   void connectDpu();
-// protected:
-//   virtual void enter() override;
-//   virtual void connect() override;
-//   virtual bool connectNode(uint16_t remoteID) override;
-  
 
 public:
   DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon, RemoteConnection *dpuConnectInfo,
-            uint32_t maxCompute = 12);
+            uint32_t maxCompute, const void *dma_export_desc, size_t dma_export_desc_len);
 
   ~DSMemoryKeeper() { disconnectMemcached(); }
   void barrier(const std::string &barrierKey);

@@ -34,12 +34,12 @@ public:
 
   // RDMA operations
   // buffer is registered memory
-  void read(char *buffer, GlobalAddress gaddr, size_t size, bool signal = true,
+  virtual void read(char *buffer, GlobalAddress gaddr, size_t size, bool signal = true,
             CoroContext *ctx = nullptr);
-  void read_sync(char *buffer, GlobalAddress gaddr, size_t size,
+  virtual void read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                  CoroContext *ctx = nullptr);
 
-  void write(const char *buffer, GlobalAddress gaddr, size_t size,
+  virtual void write(const char *buffer, GlobalAddress gaddr, size_t size,
              bool signal = true, CoroContext *ctx = nullptr);
   void write_sync(const char *buffer, GlobalAddress gaddr, size_t size,
                   CoroContext *ctx = nullptr);

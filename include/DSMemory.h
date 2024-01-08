@@ -77,6 +77,10 @@ private:
 
   Directory *dirAgent[NR_DIRECTORY];
 
+  void init_dma_host_args();
+  const void *dma_export_desc; 
+  size_t dma_export_desc_len;
+
 public:
   bool is_register() { return thread_id != -1; }
   void barrier(const std::string &ss) { keeper->barrier(ss); }

@@ -107,11 +107,23 @@ constexpr int kIndexCacheSize = 1000; // MB
 } // namespace define
 
 //高精度时间戳
+#ifndef AARCH64
 static inline unsigned long long asm_rdtsc(void) {
   unsigned hi, lo;
   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
   return ((unsigned long long)lo) | (((unsigned long long)hi) << 32);
 }
+#else
+static inline unsigned long long asm_rdtsc(void) {
+  // unsigned hi, lo;
+  // asm __volatile("rdtsc" : "=a"(lo), "=d"(hi));
+  unsigned long long freq;   
+	asm volatile("mrs %0, cntfrq_el0" : "=r" (freq));   
+  return freq; 
+  return 0;
+}
+
+#endif
 
 // For Tree
 using Key = uint64_t;
@@ -124,14 +136,30 @@ constexpr Value kValueNull = 0;
 constexpr uint32_t kInternalPageSize = 1024;
 constexpr uint32_t kLeafPageSize = 1024;
 
+#ifndef AARCH64
 __inline__ unsigned long long rdtsc(void) {
   unsigned hi, lo;
   __asm__ __volatile__("rdtsc" : "=a"(lo), "=d"(hi));
   return ((unsigned long long)lo) | (((unsigned long long)hi) << 32);
 }
+#else
+__inline__ unsigned long long rdtsc(void) {
+  unsigned long long freq;   
+	asm volatile("mrs %0, cntfrq_el0" : "=r" (freq));   
+  return freq; 
+  return 0;
+}
+#endif
+
 
 inline void mfence() { asm volatile("mfence" ::: "memory"); }
 
 inline void compiler_barrier() { asm volatile("" ::: "memory"); }
+
+
+//for doca dma
+#define DMA_PCIE_ADDR "b5:00.0"
+
+
 
 #endif /* __COMMON_H__ */

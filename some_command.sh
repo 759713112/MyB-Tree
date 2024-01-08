@@ -62,3 +62,13 @@ mlnx_tune
 
 
 flint -d /dev/mst/mt41692_pciconf0  -i ./fw-BlueField-3-rel-32_39_2048-900-9D3B6-00SV-A_Ax-NVME-20.4.1-UEFI-21.4.13-UEFI-22.4.12-UEFI-14.32.17-FlexBoot-3.7.300.signed.bin burn 
+
+
+
+#host bashrc
+export PKG_CONFIG_PATH=/opt/mellanox/collectx/lib/x86_64-linux-gnu/pkgconfig:/opt/mellanox/doca/lib/x86_64-linux-gnu/pkgconfig:/opt/mellanox/dpdk/lib/x86_64-linux-gnu/pkgconfig:/opt/mellanox/flexio/lib/pkgconfig:/opt/mellanox/grpc/share/pkgconfig:/opt/mellanox/grpc/lib/pkgconfig:$PKG_CONFIG_PATH
+
+#dpu bashrc
+export PKG_CONFIG_PATH=/opt/mellanox/collectx/lib/aarch64-linux-gnu/pkgconfig:/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig:/opt/mellanox/dpdk/lib/aarch64-linux-gnu/pkgconfig:/opt/mellanox/flexio/lib/pkgconfig:/opt/mellanox/grpc/share/pkgconfig:/opt/mellanox/grpc/lib/pkgconfig:$PKG_CONFIG_PATH
+export PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig
+export PATH=${PATH}:/opt/mellanox/doca/tools

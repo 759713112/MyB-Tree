@@ -39,7 +39,7 @@ private:
   void setDataFromRemoteDpu(uint16_t remoteID, ExchangeMeta *remoteMeta);
 
 protected:
-  virtual void initLocalMeta() override;
+  void initLocalMeta();
   virtual void enter() override;
   virtual void connect() override;
   virtual bool connectNode(uint16_t remoteID) override;

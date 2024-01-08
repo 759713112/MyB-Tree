@@ -8,11 +8,11 @@ const char *DSMemoryKeeper::ServerPrefix = "SPre";
 
 
 DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *remoteCon, RemoteConnection *dpuCon,
-            uint32_t maxCompute)
+            uint32_t maxCompute, const void *dma_export_desc, size_t dma_export_desc_len)
       : Keeper(maxCompute), dirCon(dirCon), 
         remoteCon(remoteCon), dpuConnectInfo(dpuCon) {
 
-    initLocalMeta();
+    initLocalMeta(dma_export_desc, dma_export_desc_len);
 
     if (!connectMemcached()) {
       return;
@@ -21,11 +21,10 @@ DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *r
     connect();
     connectDpu();
 
-
     initRouteRule();
 }
 
-void DSMemoryKeeper::initLocalMeta() {
+void DSMemoryKeeper::initLocalMeta(const void *dma_export_desc, size_t dma_export_desc_len) {
   localMeta.dsmBase = (uint64_t)dirCon[0]->dsmPool;
   localMeta.lockBase = (uint64_t)dirCon[0]->lockPool;
 
@@ -40,7 +39,8 @@ void DSMemoryKeeper::initLocalMeta() {
 
     localMeta.dirUdQpn[i] = dirCon[i]->message->getQPN();
   }
-
+  memcpy(localMeta.dma_export_desc, dma_export_desc, dma_export_desc_len);
+  localMeta.dma_export_desc_len = dma_export_desc_len;
 }
 void DSMemoryKeeper::enter() {
   memcached_return rc;
@@ -117,7 +117,7 @@ void DSMemoryKeeper::connectDpu() {
 
   std::string getK = "dpu-server" + std::to_string(getMyNodeID());
   ExchangeMeta *remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
-
+  std::cout <<remoteMeta->dpuTh[0].gid << std::endl;
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     auto &c = dirCon[i];
 

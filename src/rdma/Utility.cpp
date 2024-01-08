@@ -43,8 +43,7 @@ void checkDMSupported(struct ibv_context *ctx) {
     exit(-1);
   }
   if (!(attrs.max_dm_size)) {
-    fprintf(stderr, "Can not support device memory!\n");
-    exit(-1);
+    fprintf(stderr, "Can not support device memory!!!!!!\n");
   } else {
     kMaxDeviceMemorySize = attrs.max_dm_size;
     printf("The RNIC has %dKB device memory\n", kMaxDeviceMemorySize / 1024);

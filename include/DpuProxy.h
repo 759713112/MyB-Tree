@@ -13,6 +13,7 @@
 #include "DpuConnection.h"
 #include "DSDpuKeeper.h"
 #include "DSM.h"
+#include "common.h"
 class DSMKeeper;
 class Directory;
 
@@ -27,15 +28,26 @@ public:
   static DpuProxy *getInstance(const DSMConfig &conf);
   virtual void rpc_call_dir(const RawMessage &m, uint16_t node_id,
                     uint16_t dir_id = 0) override;
+
+  virtual void read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
+              CoroContext *ctx) override;
+  void read_sync(char *buffer, GlobalAddress gaddr, size_t size,
+                    CoroContext *ctx);
+  
+  void simple_proxy() {
+    
+  }
+
 private:
   DpuProxy(const DSMConfig &conf);
   ~DpuProxy();
+  void init_dma_state();
 
   RemoteConnection *computeInfo;
   // ThreadConnection *hostCon[MAX_DPU_THREAD];
   // DpuConnection *dpuCon[MAX_DPU_THREAD];
+  struct program_core_objects *dma_state;
 
   DSDpuKeeper *keeper; 
-
 };
 #endif /* __DPU_PROXY_H__ */

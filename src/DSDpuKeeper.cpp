@@ -8,7 +8,7 @@ const char *DSDpuKeeper::ServerPrefix = "SPre";
 
 DSDpuKeeper::DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
         uint32_t maxCompute)
-      : Keeper(maxCompute), thCon(thCon), remoteCon(remoteCon), computeCon(computeCon), maxCompute(maxCompute) {
+      : Keeper(maxCompute), thCon(thCon), remoteCon(remoteCon), computeCon(computeCon), maxCompute(maxCompute), dma_state(dma_state) {
     initLocalMeta();
 
     if (!connectMemcached()) {
@@ -79,6 +79,7 @@ void DSDpuKeeper::connectServer() {
     ExchangeMeta *remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
 
     setDataFromRemote(getMyNodeID(), remoteMeta);
+    init_dma_export(remoteMeta); 
     free(remoteMeta);
     std::cout << "connect to server ok" << std::endl;
 }
@@ -178,6 +179,12 @@ uint64_t DSDpuKeeper::sum(const std::string &sum_key, uint64_t value) {
     key = key_prefix + std::to_string(i);
     ret += *(uint64_t *)memGet(key.c_str(), key.size());
   }
-
   return ret;
 }
+
+
+ void DSDpuKeeper::init_dma_export(ExchangeMeta *remoteMeta) {
+    this->dma_export_desc = new char[1024];
+    memcpy(this->dma_export_desc, remoteMeta->dma_export_desc, remoteMeta->dma_export_desc_len);
+    this->dma_export_desc_len = remoteMeta->dma_export_desc_len;
+ }

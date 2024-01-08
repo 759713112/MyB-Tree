@@ -7,6 +7,14 @@
 
 #include <algorithm>
 
+
+#include <doca_argp.h>
+#include <doca_dev.h>
+extern "C" {
+	#include "dma_common.h"
+	#include "dma_copy_sample.h"
+}
+
 // thread_local int DpuProxy::thread_id = -1;
 // thread_local ThreadConnection *DpuProxy::iCon = nullptr;
 // thread_local char *DpuProxy::rdma_buffer = nullptr;
@@ -22,7 +30,7 @@ DpuProxy *DpuProxy::getInstance(const DSMConfig &conf) {
 DpuProxy::DpuProxy(const DSMConfig &conf)
     : DSM(conf) {
 
-  remoteInfo = new RemoteConnection[0];
+  remoteInfo = new RemoteConnection[1];
   computeInfo = new RemoteConnection[conf.machineNR];
 
   
@@ -35,7 +43,11 @@ DpuProxy::DpuProxy(const DSMConfig &conf)
   }
 
   
+
   keeper = new DSDpuKeeper(thCon, remoteInfo, computeInfo, conf.machineNR);
+
+  init_dma_state();
+
   myNodeID = keeper->getMyNodeID();
   keeper->barrier("DpuProxy-init");
 }
@@ -75,4 +87,41 @@ void DpuProxy::rpc_call_dir(const RawMessage &m, uint16_t node_id,
     buffer->app_id = thread_id;
 
     iCon->sendMessage2Dir(buffer, node_id, dir_id);
+}
+
+
+void DpuProxy::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
+               CoroContext *ctx) {
+  if (ctx == nullptr) {
+    rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
+             remoteInfo[gaddr.nodeID].dsmBase + gaddr.offset, size,
+             iCon->cacheLKey, remoteInfo[gaddr.nodeID].dsmRKey[0], signal);
+  } else {
+    rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
+             remoteInfo[gaddr.nodeID].dsmBase + gaddr.offset, size,
+             iCon->cacheLKey, remoteInfo[gaddr.nodeID].dsmRKey[0], true,
+             ctx->coro_id);
+    (*ctx->yield)(*ctx->master);
+  }
+}
+
+
+void DpuProxy::read_sync(char *buffer, GlobalAddress gaddr, size_t size,
+                    CoroContext *ctx) {
+  read(buffer, gaddr, size, true, ctx);
+  
+  if (ctx == nullptr) {
+    ibv_wc wc;
+    pollWithCQ(iCon->cq, 1, &wc);
+  }
+}
+
+
+void DpuProxy::init_dma_state() {
+
+  this->dma_state = new program_core_objects;
+  memset(dma_state, 0, sizeof(program_core_objects));
+  
+  dma_copy_dpu(this->dma_state, this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
+              (void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, "03:00.0");
 }

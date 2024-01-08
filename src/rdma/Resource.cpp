@@ -25,10 +25,18 @@ bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
 
   for (int i = 0; i < devicesNum; ++i) {
     // printf("Device %d: %s\n", i, ibv_get_device_name(deviceList[i]));
+#ifndef AARCH64
     if (ibv_get_device_name(deviceList[i])[5] == '0') {
       devIndex = i;
       break;
     }
+#else
+    if (ibv_get_device_name(deviceList[i])[5] == '2') {
+      devIndex = i;
+      gidIndex = 1;
+      break;
+    }
+#endif
   }
 
   if (devIndex >= devicesNum) {
