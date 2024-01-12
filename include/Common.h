@@ -159,7 +159,7 @@ inline void compiler_barrier() { asm volatile("" ::: "memory"); }
 
 //for doca dma
 #define DMA_PCIE_ADDR "b5:00.0"
-
+#define PCIE_ADDR_ON_DPU "03:00.0"
 
 
 #endif /* __COMMON_H__ */

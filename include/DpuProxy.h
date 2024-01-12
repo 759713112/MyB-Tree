@@ -13,7 +13,8 @@
 #include "DpuConnection.h"
 #include "DSDpuKeeper.h"
 #include "DSM.h"
-#include "common.h"
+#include "DmaDpu.h"
+
 class DSMKeeper;
 class Directory;
 
@@ -24,7 +25,7 @@ public:
   // virtual void registerThread() override;
   // clear the network resources for all threads
   void resetThread() { appID.store(0); }
-
+  virtual void registerThread() override; 
   static DpuProxy *getInstance(const DSMConfig &conf);
   virtual void rpc_call_dir(const RawMessage &m, uint16_t node_id,
                     uint16_t dir_id = 0) override;
@@ -34,6 +35,8 @@ public:
   void read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                     CoroContext *ctx);
   
+  void readByDma(char* buffer, uint64_t offset, size_t size, bool signal,
+              CoroContext *ctx);
   void simple_proxy() {
     
   }
@@ -46,7 +49,8 @@ private:
   RemoteConnection *computeInfo;
   // ThreadConnection *hostCon[MAX_DPU_THREAD];
   // DpuConnection *dpuCon[MAX_DPU_THREAD];
-  struct program_core_objects *dma_state;
+
+  DmaConnectCtx dmaCon;
 
   DSDpuKeeper *keeper; 
 };

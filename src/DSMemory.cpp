@@ -8,25 +8,12 @@
 
 #include <doca_argp.h>
 #include <doca_dev.h>
-extern "C" {
-	#include "dma_common.h"
-	#include "dma_copy_sample.h"
-}
+
+#include "DmaDpu.h"
 
 DSMemory *DSMemory::getInstance(const DSMConfig &conf) {
   static DSMemory dsm(conf);
   return &dsm;
-  // static DSM *dsm = nullptr;
-  // static WRLock lock;
-
-  // lock.wLock();
-  // if (!dsm) {
-  //   dsm = new DSM(conf);
-  // } else {
-  // }
-  // lock.wUnlock();
-
-  // return dsm;
 }
 
 DSMemory::DSMemory(const DSMConfig &conf)
@@ -54,6 +41,8 @@ DSMemory::DSMemory(const DSMConfig &conf)
   }
   // clear up first chunk
   memset((char *)baseAddr, 0, define::kChunkSize);
+  memcpy((char *)baseAddr, "just\0aaaaaa", 10);
+  memcpy((char *)(baseAddr+1024), "22just\0aaaaaa", 10);
   init_dma_host_args();
 
   
@@ -72,30 +61,31 @@ DSMemory::DSMemory(const DSMConfig &conf)
 
 DSMemory::~DSMemory() {}
 
+
 void DSMemory::init_dma_host_args() {
 	doca_error_t result;
 	int exit_status = EXIT_FAILURE;
 
 #ifndef DOCA_ARCH_HOST
-	DOCA_LOG_ERR("Sample can run only on the Host");
-	goto sample_exit;
+	Debug::notifyInfo("Sample can run only on the Host");
+	exit(-1);
 #endif
 
-	result = doca_argp_init("doca_dma_copy_host", nullptr);
-	if (result != DOCA_SUCCESS) {
-    Debug::notifyInfo("Failed to init ARGP resources: %s", doca_get_error_string(result));
-		exit(-1);
-	}
-	result = register_dma_params(true);
-	if (result != DOCA_SUCCESS) {
-    Debug::notifyInfo("Failed to register DMA sample parameters: %s", doca_get_error_string(result));
-		exit(-1);
-	}
-	result = doca_argp_start(0, nullptr);
-	if (result != DOCA_SUCCESS) {
-		Debug::notifyInfo("Failed to parse sample input: %s", doca_get_error_string(result));
-		exit(-1);
-	}
+	// result = doca_argp_init("doca_dma_copy_host", nullptr);
+	// if (result != DOCA_SUCCESS) {
+  //   Debug::notifyInfo("Failed to init ARGP resources: %s", doca_get_error_string(result));
+	// 	exit(-1);
+	// }
+	// result = register_dma_params(true);
+	// if (result != DOCA_SUCCESS) {
+  //   Debug::notifyInfo("Failed to register DMA sample parameters: %s", doca_get_error_string(result));
+	// 	exit(-1);
+	// }
+	// result = doca_argp_start(0, nullptr);
+	// if (result != DOCA_SUCCESS) {
+	// 	Debug::notifyInfo("Failed to parse sample input: %s", doca_get_error_string(result));
+	// 	exit(-1);
+	// }
 
 	result = dma_copy_host(DMA_PCIE_ADDR, (void*)this->baseAddr, conf.dsmSize * define::GB, &dma_export_desc, &dma_export_desc_len);
 	if (result != DOCA_SUCCESS) {

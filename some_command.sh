@@ -72,3 +72,8 @@ export PKG_CONFIG_PATH=/opt/mellanox/collectx/lib/x86_64-linux-gnu/pkgconfig:/op
 export PKG_CONFIG_PATH=/opt/mellanox/collectx/lib/aarch64-linux-gnu/pkgconfig:/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig:/opt/mellanox/dpdk/lib/aarch64-linux-gnu/pkgconfig:/opt/mellanox/flexio/lib/pkgconfig:/opt/mellanox/grpc/share/pkgconfig:/opt/mellanox/grpc/lib/pkgconfig:$PKG_CONFIG_PATH
 export PKG_CONFIG_PATH=${PKG_CONFIG_PATH}:/opt/mellanox/doca/lib/aarch64-linux-gnu/pkgconfig
 export PATH=${PATH}:/opt/mellanox/doca/tools
+
+echo 0 > /proc/sys/kernel/core_uses_pid
+sysctl -w kernel.core_pattern=core
+
+doca_ctx_workq_add
