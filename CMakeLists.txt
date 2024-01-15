@@ -17,7 +17,7 @@ set(COMMON_SRC ${PROJECT_SOURCE_DIR}/src)
 file(GLOB_RECURSE COMMON_FILE ${COMMON_SRC}/*.c*)
 set(INCLUDE_BASE ${PROJECT_SOURCE_DIR}/include)
 include_directories(${INCLUDE_BASE} ${DOCA_INCLUDE_DIRS})
-
+add_compile_definitions(USE_CORO)
 if (DOCA_FOUND)
 
 

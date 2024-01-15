@@ -270,11 +270,11 @@ int main(int argc, char *argv[]) {
   dsm->registerThread();
   tree = new Tree(dsm);
 
-  // if (dsm->getMyNodeID() == 0) {
-  //   for (uint64_t i = 1; i < 10; ++i) {
-  //     tree->insert(to_key(i), i * 2);
-  //   }
-  // }
+  if (dsm->getMyNodeID() == 0) {
+    for (uint64_t i = 1; i < 1024000; ++i) {
+      tree->insert(to_key(i), i * 2);
+    }
+  }
   std::cout << "okkkk" << std::endl;
   dsm->barrier("benchmark");
   dsm->resetThread();

@@ -92,16 +92,12 @@ void DSM::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
 
 void DSM::read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                     CoroContext *ctx) {
-
-  Timer t;
-  t.begin();
   read(buffer, gaddr, size, true, ctx);
 
   if (ctx == nullptr) {
     ibv_wc wc;
     pollWithCQ(iCon->cq, 1, &wc);
   }
-  Debug::notifyInfo("time: %d, size %d", t.end(), size);
 }
 
 void DSM::write(const char *buffer, GlobalAddress gaddr, size_t size,

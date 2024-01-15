@@ -38,7 +38,7 @@
 #define RAW_RECV_CQ_COUNT 128
 
 // { app thread
-#define MAX_APP_THREAD 1
+#define MAX_APP_THREAD 8
 #define MAX_DPU_THREAD 1
 
 #define APP_MESSAGE_NR 96
