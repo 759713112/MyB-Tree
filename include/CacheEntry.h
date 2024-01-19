@@ -8,8 +8,7 @@ struct CacheEntry {
   Key from;
   Key to; // [from, to]
   mutable InternalPage *ptr;
-}
- __attribute__((packed));
+}__attribute__((packed));
 
 static_assert(sizeof(CacheEntry) == 2 * sizeof(Key) + sizeof(uint64_t), "XXX");
 

@@ -253,8 +253,8 @@ int main(int argc, char *argv[]) {
   config.machineNR = kNodeCount;
   dsm = DpuProxy::getInstance(config);
 
-  // dsm->registerThread();
-  // dsm->resetThread();
+  dsm->registerThread();
+  dsm->resetThread();
   // tree = new Tree(dsm);
   std::cout << "init ok" << std::endl;
   sleep(100000);
@@ -265,7 +265,7 @@ int main(int argc, char *argv[]) {
   }
 
   // dsm->barrier("benchmark");
-  dsm->resetThread();
+
   // dsm->barrier("warm_finish");
   std::signal(SIGINT, signalHandler);
 

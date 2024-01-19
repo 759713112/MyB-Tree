@@ -6,6 +6,9 @@
 
 #include <algorithm>
 
+
+thread_local DmaConnect DpuProxy::dmaCon;
+
 DpuProxy *DpuProxy::getInstance(const DSMConfig &conf) {
 	static DpuProxy dsm(conf);
 	return &dsm;
@@ -30,7 +33,7 @@ DpuProxy::DpuProxy(const DSMConfig &conf)
 	keeper = new DSDpuKeeper(thCon, remoteInfo, computeInfo, conf.machineNR);
 
 	init_dma_state();
-
+	
 	myNodeID = keeper->getMyNodeID();
 	keeper->barrier("DpuProxy-init");
 }
@@ -48,6 +51,7 @@ void DpuProxy::registerThread() {
   thread_tag = thread_id + (((uint64_t)this->getMyNodeID()) << 32) + 1;
 
   iCon = thCon[thread_id];
+  this->init_dma_state();
 
   if (!has_init[thread_id]) {
     has_init[thread_id] = true;
@@ -58,6 +62,8 @@ void DpuProxy::registerThread() {
   for (int i = 0; i < define::kMaxCoro; ++i) {
     rbuf[i].set_buffer(rdma_buffer + i * define::kPerCoroRdmaBuf);
   }
+
+  dmaCon.init(&dmaConCtx, define::kMaxCoro * 2);
 }
 
 void DpuProxy::rpc_call_dir(const RawMessage &m, uint16_t node_id,
@@ -93,42 +99,47 @@ void DpuProxy::read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                     CoroContext *ctx) {
 #ifndef AARCH64
   read(buffer, gaddr, size, true, ctx);
-  
   if (ctx == nullptr) {
     ibv_wc wc;
     pollWithCQ(iCon->cq, 1, &wc);
   }
 #else
-  dmaCon.readByDma(buffer, gaddr.offset, size, false, nullptr);
 #endif
 }
 
-#include <Timer.h>
+
+void DpuProxy::readByDma(void *buffer, uint64_t addr, size_t size, CoroContext *ctx) {
+	dmaCon.readByDma(buffer, addr, size, ctx);
+}
+
+
+
+
+
 
 void DpuProxy::init_dma_state() {
+	size_t local_buffer_size = DPU_CACHE_INTERNAL_PAGE_NUM * sizeof(InternalPage);
+	void* local_buffer = hugePageAlloc(local_buffer_size);
+#ifndef AARCH64
+	auto result = dmaConCtx.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
+				(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, local_buffer, local_buffer_size,
+				DMA_PCIE_ADDR_ON_HOST);
+#else
+	auto result = dmaConCtx.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
+		(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, local_buffer, local_buffer_size, DMA_PCIE_ADDR_ON_DPU);
+#endif
 
-	auto result = dmaCon.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
-				(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, PCIE_ADDR_ON_DPU);
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("Failed DMA init: %s", doca_get_error_string(result));
 		exit(-1);
 	}
-	auto buffer = (char*)malloc(40960);
-	void* a = dmaCon.mmapSetMemrange(buffer, 4096);
-	memset(buffer, 0, 1024);
-	dmaCon.readByDma(buffer, 0, 64, false, a);
-	dmaCon.readByDma(buffer, 0, 128, false, a);
-	dmaCon.readByDma(buffer, 0, 256, false, a);
-	dmaCon.readByDma(buffer, 1024, 1024, false, a);
-	dmaCon.readByDma(buffer, 0, 40960, false, a);
-	// DmaConnectCtx dmaCon2;
-	// result = dmaCon2.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
-	// 			(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, PCIE_ADDR_ON_DPU);
-	// if (result != DOCA_SUCCESS) {
-	// 	Debug::notifyError("Failed DMA init: %s", doca_get_error_string(result));
-	// 	exit(-1);
-	// }
-
-	// dmaCon.readByDma(buffer, 0, 1024, false, a);
-	// dmaCon.readByDma(buffer, 1024, 1024, false, a);
+	using namespace std::placeholders;
+	dmaCon.init(&dmaConCtx, 10);
+	CoroContext ctx;
+	ctx.coro_id = 2;
+	this->dpuCache = new DpuCacheMultiCon(std::bind(&DpuProxy::readByDma, this, _1, _2, _3, _4), 
+							local_buffer, local_buffer_size, 1024);
+	char* data = (char*)dpuCache->get(0, &ctx);
+	sleep(5);
+	Debug::notifyInfo("read1111 %s", data);
 }

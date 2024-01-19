@@ -351,7 +351,7 @@ doca_error_t
 start_context(struct program_core_objects *state, uint32_t workq_depth)
 {
 	doca_error_t res;
-	struct doca_workq *workq;
+	// struct doca_workq *workq;
 
 	res = doca_ctx_start(state->ctx);
 	if (res != DOCA_SUCCESS) {
@@ -361,19 +361,19 @@ start_context(struct program_core_objects *state, uint32_t workq_depth)
 		return res;
 	}
 
-	res = doca_workq_create(workq_depth, &workq);
-	if (res != DOCA_SUCCESS) {
-		DOCA_LOG_ERR("Unable to create work queue: %s", doca_get_error_string(res));
-		return res;
-	}
+	// res = doca_workq_create(workq_depth, &workq);
+	// if (res != DOCA_SUCCESS) {
+	// 	DOCA_LOG_ERR("Unable to create work queue: %s", doca_get_error_string(res));
+	// 	return res;
+	// }
 
-	res = doca_ctx_workq_add(state->ctx, workq);
-	if (res != DOCA_SUCCESS) {
-		DOCA_LOG_ERR("Unable to register work queue with context: %s", doca_get_error_string(res));
-		doca_workq_destroy(workq);
-		state->workq = NULL;
-	} else
-		state->workq = workq;
+	// res = doca_ctx_workq_add(state->ctx, workq);
+	// if (res != DOCA_SUCCESS) {
+	// 	DOCA_LOG_ERR("Unable to register work queue with context: %s", doca_get_error_string(res));
+	// 	doca_workq_destroy(workq);
+	// 	state->workq = NULL;
+	// } else
+	// 	state->workq = workq;
 
 	return res;
 }
@@ -383,20 +383,20 @@ destroy_core_objects(struct program_core_objects *state)
 {
 	doca_error_t tmp_result, result = DOCA_SUCCESS;
 
-	if (state->workq != NULL) {
-		tmp_result = doca_ctx_workq_rm(state->ctx, state->workq);
-		if (tmp_result != DOCA_SUCCESS) {
-			DOCA_ERROR_PROPAGATE(result, tmp_result);
-			DOCA_LOG_ERR("Failed to remove work queue from ctx: %s", doca_get_error_string(tmp_result));
-		}
+	// if (state->workq != NULL) {
+	// 	tmp_result = doca_ctx_workq_rm(state->ctx, state->workq);
+	// 	if (tmp_result != DOCA_SUCCESS) {
+	// 		DOCA_ERROR_PROPAGATE(result, tmp_result);
+	// 		DOCA_LOG_ERR("Failed to remove work queue from ctx: %s", doca_get_error_string(tmp_result));
+	// 	}
 
-		tmp_result = doca_workq_destroy(state->workq);
-		if (tmp_result != DOCA_SUCCESS) {
-			DOCA_ERROR_PROPAGATE(result, tmp_result);
-			DOCA_LOG_ERR("Failed to destroy work queue: %s", doca_get_error_string(tmp_result));
-		}
-		state->workq = NULL;
-	}
+	// 	tmp_result = doca_workq_destroy(state->workq);
+	// 	if (tmp_result != DOCA_SUCCESS) {
+	// 		DOCA_ERROR_PROPAGATE(result, tmp_result);
+	// 		DOCA_LOG_ERR("Failed to destroy work queue: %s", doca_get_error_string(tmp_result));
+	// 	}
+	// 	state->workq = NULL;
+	// }
 
 	if (state->buf_inv != NULL) {
 		tmp_result = doca_buf_inventory_destroy(state->buf_inv);

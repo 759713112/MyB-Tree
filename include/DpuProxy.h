@@ -14,6 +14,7 @@
 #include "DSDpuKeeper.h"
 #include "DSM.h"
 #include "DmaDpu.h"
+#include "DpuCache.h"
 
 class DSMKeeper;
 class Directory;
@@ -35,11 +36,9 @@ public:
   void read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                     CoroContext *ctx);
   
-  void readByDma(char* buffer, uint64_t offset, size_t size, bool signal,
+  void readByDma(void* buffer, uint64_t addr, size_t size,
               CoroContext *ctx);
-  void simple_proxy() {
-    
-  }
+
 
 private:
   DpuProxy(const DSMConfig &conf);
@@ -50,8 +49,11 @@ private:
   // ThreadConnection *hostCon[MAX_DPU_THREAD];
   // DpuConnection *dpuCon[MAX_DPU_THREAD];
 
-  DmaConnectCtx dmaCon;
+  DmaConnectCtx dmaConCtx;
+  static thread_local DmaConnect dmaCon;
 
+
+  DpuCache *dpuCache;
   DSDpuKeeper *keeper; 
 };
 #endif /* __DPU_PROXY_H__ */

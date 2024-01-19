@@ -206,7 +206,7 @@ private:
   Header hdr;
   InternalEntry records[kInternalCardinality];
 
-  // uint8_t padding[3];
+  uint8_t padding[3];
   uint8_t rear_version;
 
   friend class Tree;

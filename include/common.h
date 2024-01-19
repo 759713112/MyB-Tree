@@ -27,7 +27,6 @@ struct program_core_objects {
 	struct doca_mmap *dst_mmap;		/* doca mmap for destination buffer */
 	struct doca_buf_inventory *buf_inv;	/* doca buffer inventory */
 	struct doca_ctx *ctx;			/* doca context */
-	struct doca_workq *workq;		/* doca work queue */
 };
 
 /*

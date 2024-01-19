@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-
+#include <queue>
 #include <atomic>
 #include <bitset>
 #include <limits>
@@ -71,7 +71,13 @@ struct CoroContext {
   CoroYield *yield;
   CoroCall *master;
   int coro_id;
+  CoroContext *next;
+  void appendToWaitQueue();
+private:
+  static thread_local std::queue<uint16_t> wait_queue;
+
 };
+
 
 namespace define {
 
@@ -159,7 +165,9 @@ inline void compiler_barrier() { asm volatile("" ::: "memory"); }
 
 //for doca dma
 #define DMA_PCIE_ADDR "b5:00.0"
-#define PCIE_ADDR_ON_DPU "03:00.0"
+#define DMA_PCIE_ADDR_ON_DPU "03:00.0"
+#define DMA_PCIE_ADDR_ON_HOST "b5:00.0"
+#define MAX_DOCA_BUFS 128
 
-
+#define DPU_CACHE_INTERNAL_PAGE_NUM 1048576 //2 ^20 
 #endif /* __COMMON_H__ */

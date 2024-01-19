@@ -77,6 +77,7 @@ void DSM::registerThread() {
 
 void DSM::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
                CoroContext *ctx) {
+  Debug::notifyError("Failed DMA init: %o", gaddr.offset);
   if (ctx == nullptr) {
     rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
              remoteInfo[gaddr.nodeID].dsmBase + gaddr.offset, size,
