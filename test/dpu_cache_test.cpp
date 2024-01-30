@@ -40,6 +40,45 @@ uint64_t latency_th_all[LATENCY_WINDOWS];
 Tree *tree;
 DpuProxy *dsm;
 DpuProcessor *dpuProcessor;
+inline Key to_key(uint64_t k) {
+  return (CityHash64((char *)&k, sizeof(k)) + 1) % kKeySpace;
+}
+
+class RequsetGenBench : public RequstGen {
+
+public:
+  RequsetGenBench(int coro_id, DSM *dsm, int id)
+      : coro_id(coro_id), dsm(dsm), id(id) {
+    seed = rdtsc();
+    mehcached_zipf_init(&state, kKeySpace, zipfan,
+                        (rdtsc() & (0x0000ffffffffffffull)) ^ id);
+  }
+
+  Request next() override {
+    Request r;
+    uint64_t dis = mehcached_zipf_next(&state);
+
+    r.k = to_key(dis);
+    r.v = 23;
+    r.is_search = rand_r(&seed) % 100 < kReadRatio;
+
+    tp[id][0]++;
+
+    return r;
+  }
+
+private:
+  int coro_id;
+  DSM *dsm;
+  int id;
+
+  unsigned int seed;
+  struct zipf_gen_state state;
+};
+
+RequstGen *coro_func(int coro_id, DSM *dsm, int id) {
+  return new RequsetGenBench(coro_id, dsm, id);
+}
 
 Timer bench_timer;
 std::atomic<int64_t> warmup_cnt{0};
@@ -55,7 +94,7 @@ void thread_run(int id) {
     ready = true;
     warmup_cnt.store(0);
   }
-  printf("I am thread %d on dpu nodes\n", dsm->getMyThreadID());
+  printf("I am thread %ld on dpu nodes\n", dsm->getMyThreadID());
 
   while (warmup_cnt.load() != 0)
     ;
@@ -66,21 +105,25 @@ void thread_run(int id) {
 #else
 
   /// without coro
+  unsigned int seed = rdtsc();
+  struct zipf_gen_state state;
+  mehcached_zipf_init(&state, kKeySpace, zipfan,
+                      (rdtsc() & (0x0000ffffffffffffull)) ^ id);
 
   Timer timer;
   while (true) {
 
-    uint64_t dis = 0;
-    uint64_t key = 0;
+    uint64_t dis = mehcached_zipf_next(&state);
+    uint64_t key = to_key(dis);
 
     Value v;
     timer.begin();
 
-    if (v % 100 < kReadRatio) { // GET
-
+    if (rand_r(&seed) % 100 < kReadRatio) { // GET
+      tree->search(key, v);
     } else {
-      
-      
+      v = 12;
+      tree->insert(key, v);
     }
 
     auto us_10 = timer.end() / 100;
@@ -158,7 +201,7 @@ void signalHandler(int signal) {
     std::exit(signal);
 }
 
-
+#include "DpuProcessor.h"
 int main(int argc, char *argv[]) {
   parse_args(argc, argv);
 
@@ -173,6 +216,8 @@ int main(int argc, char *argv[]) {
   std::cout << "init ok" << std::endl;
 
   std::signal(SIGINT, signalHandler);
+
+
 
   while (!ready.load())
     ;
@@ -193,7 +238,7 @@ int main(int argc, char *argv[]) {
     uint64_t all_tp = 0;
     for (int i = 0; i < kThreadCount; ++i) {
       all_tp += dpu_tp[i][0];
-      printf("thread %d tp %lld\n", i, dpu_tp[i][0]);
+      printf("thread %d tp %d\n", i, dpu_tp[i][0]);
     }
     uint64_t cap = all_tp - pre_tp;
     pre_tp = all_tp;

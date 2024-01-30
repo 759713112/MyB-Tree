@@ -35,7 +35,7 @@ void DSMKeeper::initLocalMeta() {
            16 * sizeof(uint8_t));
 
     localMeta.appUdQpn[i] = thCon[i]->message->getQPN();
-    localMeta.appUdQpn2dpu[i] = thCon[i]->dpuConnect->getQPN();
+    localMeta.appRcQpn2dpu[i] = thCon[i]->dpuConnect->getQPN();
   }
 }
 
@@ -120,6 +120,8 @@ void DSMKeeper::setDataToRemote(uint16_t remoteID) {
   }
 }
 
+
+#include "Timer.h"
 void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     auto &c = thCon[i];
@@ -154,21 +156,77 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
       assert(info.appToDirAh[k][i]);
     }
   }
+
+  // memcpy((char*)(thCon[0]->cachePool + MESSAGE_SIZE), "aaaaaaaaa\0", 10);
+  // auto recvs = new ibv_recv_wr[10];
+  // auto recv_sgl = new ibv_sge[10];
+
+  // for (int k = 0; k < 10; ++k) {
+  //     auto &s = recv_sgl[k];
+  //     memset(&s, 0, sizeof(s));
+
+  //     s.addr = (uint64_t)thCon[0]->cachePool + k * MESSAGE_SIZE;
+  //     s.length = MESSAGE_SIZE;
+  //     s.lkey = thCon[0]->cacheMR->lkey;
+
+  //     auto &r = recvs[k];
+  //     memset(&r, 0, sizeof(r));
+
+  //     r.sg_list = &s;
+  //     r.num_sge = 1;
+  //     r.next = (k == 9) ? NULL : &recvs[k + 1];
+  // }
+  //   Timer t;
+  // Debug::notifyInfo("message: %d", ((char*)(thCon[0]->cachePool))[MESSAGE_SIZE + 1]);
+  // struct ibv_recv_wr *bad;
+  //   t.begin();
+  // if (ibv_post_recv(thCon[0]->data[0][0], &recvs[0], &bad)) {
+  //   Debug::notifyError("Receive failed.");
+  // }
+  // Debug::notifyError("Wait to send, post recv lat %d", t.end());
+  // sleep(3);
+
+  // t.begin();
+  // rdmaSend(thCon[0]->data[0][0], (uint64_t)thCon[0]->cachePool, MESSAGE_SIZE, thCon[0]->cacheMR->lkey);
+  // Debug::notifyError("send %d", t.end());
+  // struct ibv_wc wc;
+  // while (pollOnce(thCon[0]->cq, 1, &wc) == 0);
+  // Debug::notifyInfo("qp %d  %d", wc.qp_num, wc.wr_id);
+  // Debug::notifyInfo("code %d  %d", int(wc.opcode), wc.status);
+  // Debug::notifyInfo("latency %d", t.end());
+
+  // t.begin();
+  // rdmaSend(thCon[0]->data[0][0], (uint64_t)thCon[0]->cachePool + 2048, MESSAGE_SIZE, thCon[0]->cacheMR->lkey);
+  // Debug::notifyError("send %d", t.end());
+
+  // while (pollOnce(thCon[0]->cq, 1, &wc) == 0);
+  // Debug::notifyInfo("code %d", int(wc.opcode));
+  // Debug::notifyInfo("message: %d", ((char*)(thCon[0]->cachePool))[0]);
+  // Debug::notifyInfo("message: %d", ((char*)(thCon[0]->cachePool))[40]);
+  // Debug::notifyInfo("message: %d", ((char*)(thCon[0]->cachePool))[MESSAGE_SIZE]);
+  // Debug::notifyInfo("message: %d", ((char*)(thCon[0]->cachePool))[MESSAGE_SIZE + 50]);
+  // Debug::notifyInfo("latency %d", t.end());
+  // exit(-1);
 }
 
 void DSMKeeper::setDataFromRemoteDpu(uint16_t remoteID, ExchangeMeta *remoteMeta) {
-  auto &info = remoteCon[remoteID];
-  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-    info.dpuRequestQPN[i] = remoteMeta->dpuUdQpn2app[i];
-    for (int k = 0; k < MAX_APP_THREAD; ++k) {
-      struct ibv_ah_attr ahAttr;
-      std::cout << remoteMeta->dpuTh[i].lid << "lid" << std::endl;
-      fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
-                &thCon[k]->ctx);
-      info.appToDpuAh[k][i] = ibv_create_ah(thCon[k]->ctx.pd, &ahAttr);
+  // auto &info = remoteCon[remoteID];
+  // for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+  //   info.dpuRequestQPN[i] = remoteMeta->dpuRcQpn2app[i];
+  //   for (int k = 0; k < MAX_APP_THREAD; ++k) {
+  //     struct ibv_ah_attr ahAttr;
+  //     fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
+  //               &thCon[k]->ctx);
+  //     info.appToDpuAh[k][i] = ibv_create_ah(thCon[k]->ctx.pd, &ahAttr);
 
-      assert(info.appToDpuAh[k][i]);
-    }
+  //     assert(info.appToDpuAh[k][i]);
+  //   }
+  // }
+  for (int k = 0; k < MAX_APP_THREAD; ++k)  {
+    auto &c = thCon[k];
+    c->dpuConnect->initQPtoRTS(remoteMeta->dpuRcQpn2app[getMyNodeID() * MAX_APP_THREAD + k], 
+                  remoteMeta->dpuTh[0].lid, remoteMeta->dpuTh[0].gid);
+    c->dpuConnect->initRecv();
   }
   std::cout << "connect dpu ok" << std::endl;
 

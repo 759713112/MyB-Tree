@@ -6,9 +6,10 @@ const char *DSDpuKeeper::OK = "OK";
 const char *DSDpuKeeper::ServerPrefix = "SPre";
 
 
-DSDpuKeeper::DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
+DSDpuKeeper::DSDpuKeeper(RdmaContext *ctx, DpuConnection **dpuCons, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
         uint32_t maxCompute)
-      : Keeper(maxCompute), thCon(thCon), remoteCon(remoteCon), computeCon(computeCon), maxCompute(maxCompute), dma_state(dma_state) {
+      : Keeper(maxCompute), ctx(ctx), dpuCons(dpuCons), remoteCon(remoteCon), computeCon(computeCon), 
+        maxCompute(maxCompute), dma_state(dma_state) {
     initLocalMeta();
 
     if (!connectMemcached()) {
@@ -20,20 +21,14 @@ DSDpuKeeper::DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, 
 }
 
 void DSDpuKeeper::initLocalMeta() {
-  localMeta.cacheBase = (uint64_t)thCon[0]->cachePool;
 
-
-  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-    localMeta.dpuTh[i].lid = thCon[i]->ctx.lid;
-
-    localMeta.dpuTh[i].rKey = thCon[i]->cacheMR->rkey;
-    memcpy((char *)localMeta.dpuTh[i].gid, (char *)(&thCon[i]->ctx.gid),
-           16 * sizeof(uint8_t));
-
-    localMeta.dpuUdQpn2dir[i] = thCon[i]->message->getQPN();
-    localMeta.dpuRcQpn2dir[i] = thCon[i]->data[0][0]->qp_num;
-    localMeta.dpuUdQpn2app[i] = thCon[i]->dpuConnect->getQPN();
+  localMeta.dpuTh[0].lid = ctx->lid;
+  memcpy((char *)localMeta.dpuTh[0].gid, (char *)(&ctx->gid),
+          16 * sizeof(uint8_t));
+  for (int i = 0; i < maxCompute * MAX_APP_THREAD; i++) {
+    localMeta.dpuRcQpn2app[i] = dpuCons[i]->getQPN();
   }
+
 }
 
 void DSDpuKeeper::enter() {
@@ -62,13 +57,13 @@ void DSDpuKeeper::connect() {
 }
 
 void DSDpuKeeper::setDataToRemote(uint16_t remoteID) {
-  for (int i = 0; i < MAX_APP_THREAD; ++i) {
-    auto &c = thCon[i];
-    for (int k = 0; k < NR_DIRECTORY; ++k) {
-      localMeta.appRcQpn2dir[i][k] = c->data[k][remoteID]->qp_num;
-    }
+  // for (int i = 0; i < MAX_APP_THREAD; ++i) {
+  //   auto &c = thCon[i];
+  //   for (int k = 0; k < NR_DIRECTORY; ++k) {
+  //     localMeta.appRcQpn2dir[i][k] = c->data[k][remoteID]->qp_num;
+  //   }
   
-  }
+  // }
 }
 
 void DSDpuKeeper::connectServer() {
@@ -96,60 +91,49 @@ void DSDpuKeeper::connectCompute()
       auto &info = computeCon[k];
       for (int i = 0; i < MAX_APP_THREAD; ++i) {
         info.appRKey[i] = remoteMeta->appTh[i].rKey;
-        info.appRequestQPN[i] = remoteMeta->appUdQpn2dpu[i];
-
-        for (int j = 0; j < MAX_DPU_THREAD; ++j) {
-          struct ibv_ah_attr ahAttr;
-          fillAhAttr(&ahAttr, remoteMeta->appTh[i].lid, remoteMeta->appTh[i].gid,
-                    &thCon[j]->ctx);
-          info.dpuToAppAh[j][i] = ibv_create_ah(thCon[j]->ctx.pd, &ahAttr);
-
-          assert(info.dpuToAppAh[j][i]);
-        }
+        info.appRequestQPN[i] = remoteMeta->appRcQpn2dpu[i];
+        
+        dpuCons[k * MAX_APP_THREAD + i]->initQPtoRTS(remoteMeta->appRcQpn2dpu[i], remoteMeta->appTh[i].lid, remoteMeta->appTh[i].gid);
+        dpuCons[k * MAX_APP_THREAD + i]->initRecv();
       }
       std::cout << "connect compute " << k << " ok" << std::endl;
     }
 }
 
 void DSDpuKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
-  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-    auto &c = thCon[i];
-    auto &qp = c->data[0][0];
+  // for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+  //   auto &c = thCon[i];
+  //   auto &qp = c->data[0][0];
 
-    assert(qp->qp_type == IBV_QPT_RC);
-    modifyQPtoInit(qp, &c->ctx);
-    modifyQPtoRTR(qp, remoteMeta->dirRcQpn2dpu[i],
-                  remoteMeta->dirTh[0].lid, remoteMeta->dirTh[0].gid,
-                  &c->ctx);
-    modifyQPtoRTS(qp);
-  }
+  //   assert(qp->qp_type == IBV_QPT_RC);
+  //   modifyQPtoInit(qp, &c->ctx);
+  //   modifyQPtoRTR(qp, remoteMeta->dirRcQpn2dpu[i],
+  //                 remoteMeta->dirTh[0].lid, remoteMeta->dirTh[0].gid,
+  //                 &c->ctx);
+  //   modifyQPtoRTS(qp);
+  // }
 
   auto &info = remoteCon[remoteID];
   info.dsmBase = remoteMeta->dsmBase;
   info.cacheBase = remoteMeta->cacheBase;
   info.lockBase = remoteMeta->lockBase;
 
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    info.dsmRKey[i] = remoteMeta->dirTh[i].rKey;
-    info.lockRKey[i] = remoteMeta->dirTh[i].lock_rkey;
-    info.dirMessageQPN[i] = remoteMeta->dirUdQpn[i];
+  // for (int i = 0; i < NR_DIRECTORY; ++i) {
+  //   info.dsmRKey[i] = remoteMeta->dirTh[i].rKey;
+  //   info.lockRKey[i] = remoteMeta->dirTh[i].lock_rkey;
+  //   info.dirMessageQPN[i] = remoteMeta->dirUdQpn[i];
 
 
-    for (int k = 0; k < MAX_DPU_THREAD; ++k) {
-      auto &c = thCon[k];
+  //   for (int k = 0; k < MAX_DPU_THREAD; ++k) {
+  //     auto &c = thCon[k];
+  //     struct ibv_ah_attr ahAttr;
+  //     fillAhAttr(&ahAttr, remoteMeta->dirTh[i].lid, remoteMeta->dirTh[i].gid,
+  //                &c->ctx);
+  //     info.dpuToDirAh[k][i] = ibv_create_ah(c->ctx.pd, &ahAttr);
+  //     assert(info.dpuToDirAh[k][i]);
+  //   }
 
-      // //奇怪的bug 先这样
-      // c->ctx.port = 1;
-      // c->ctx.gidIndex = 3;
-
-      struct ibv_ah_attr ahAttr;
-      fillAhAttr(&ahAttr, remoteMeta->dirTh[i].lid, remoteMeta->dirTh[i].gid,
-                 &c->ctx);
-      info.dpuToDirAh[k][i] = ibv_create_ah(c->ctx.pd, &ahAttr);
-      assert(info.dpuToDirAh[k][i]);
-    }
-
-  }
+  // }
 }
 
 

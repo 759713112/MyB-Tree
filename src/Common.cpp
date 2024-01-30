@@ -47,7 +47,3 @@ char *getMac() {
 
 
 thread_local std::queue<uint16_t> CoroContext::wait_queue;
-void CoroContext::appendToWaitQueue() {
-    this->wait_queue.push(this->coro_id);
-    //(*this->yield)(*this->master);
-}

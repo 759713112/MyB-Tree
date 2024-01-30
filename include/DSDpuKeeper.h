@@ -18,9 +18,11 @@ class DSDpuKeeper : public Keeper {
 private:
   static const char *OK;
   static const char *ServerPrefix;
+  RdmaContext *ctx;
+  DpuConnection **dpuCons;
   RemoteConnection *remoteCon;
   RemoteConnection *computeCon;
-  ThreadConnection **thCon;
+
   
   ExchangeMeta localMeta;
   uint32_t maxCompute;
@@ -47,7 +49,7 @@ private:
 
   void init_dma_export(ExchangeMeta *remoteMeta);
 public:
-  DSDpuKeeper(ThreadConnection **thCon, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
+  DSDpuKeeper(RdmaContext *ctx, DpuConnection **dpuCons, RemoteConnection *remoteCon, RemoteConnection *computeCon, 
         uint32_t maxCompute = 12);
 
   ~DSDpuKeeper() { disconnectMemcached(); }

@@ -26,7 +26,7 @@ ovs-vsctl show
 # 大内存
 sudo vi /etc/default/grub
 GRUB_CMDLINE_LINUX="default_hugepagesz=2M hugepagesz=2M hugepages=512"
-sudo update-grub
+sudo update-grub1
 
 
 
@@ -35,7 +35,7 @@ sudo apt install librdmacm-dev
 
 sshfs ubuntu@192.168.100.2:/opt/mellanox/doca ./dpu_doca
 
-
+11111111
 git config --global user.name "CJQ"
 git config --global user.email "759713112@qq.com"
 

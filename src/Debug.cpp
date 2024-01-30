@@ -35,18 +35,20 @@ void Debug::debugItem(const char *format, ...) {
 }
 
 void Debug::debugCur(const char *format, ...) {
-    char newFormat[MAX_FORMAT_LEN];
-
-    va_list args;
-    va_start(args, format); /* Start of variable arguments. */
-
+    
     if (CUR == true) /* If debug option is set. */
     {
+        char newFormat[MAX_FORMAT_LEN];
+
+        va_list args;
+        va_start(args, format); /* Start of variable arguments. */
         sprintf(newFormat, "%s\n", format); /* Wrap format in a style. */
         vprintf(newFormat, args);           /* Print string of debug item. */
+
+        va_end(args); /* End of variable arguments. */
     }
 
-    va_end(args); /* End of variable arguments. */
+
 }
 /* Print necessary information at start period. Can be used in a formatted style
    like a printf().

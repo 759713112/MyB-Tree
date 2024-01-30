@@ -108,7 +108,7 @@ bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
 }
 
 // for RC & UC
-bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
+bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey, bool isSignaled,
               int32_t imm) {
 
   struct ibv_sge sg;
@@ -123,8 +123,9 @@ bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
   } else {
     wr.opcode = IBV_WR_SEND;
   }
-
-  wr.send_flags = IBV_SEND_SIGNALED;
+  if (isSignaled) {
+    wr.send_flags = IBV_SEND_SIGNALED;
+  }
   if (ibv_post_send(qp, &wr, &wrBad)) {
     Debug::notifyError("Send with RDMA_SEND failed.");
     return false;

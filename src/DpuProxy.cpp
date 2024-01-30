@@ -8,34 +8,38 @@
 
 
 thread_local DmaConnect DpuProxy::dmaCon;
+thread_local ibv_cq* DpuProxy::completeQueue;
 
 DpuProxy *DpuProxy::getInstance(const DSMConfig &conf) {
 	static DpuProxy dsm(conf);
 	return &dsm;
 }
 
-DpuProxy::DpuProxy(const DSMConfig &conf)
-    : DSM(conf) {
-
-	remoteInfo = new RemoteConnection[1];
+DpuProxy::DpuProxy(const DSMConfig &conf) : DSM(conf) {
+	remoteInfo = new RemoteConnection[1];	
 	computeInfo = new RemoteConnection[conf.machineNR];
-
-
+	createContext(&ctx);
+	
 	Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
+
+	int dpuConPerThread = std::max((conf.machineNR * MAX_APP_THREAD) / MAX_DPU_THREAD, 1u);
+	int dpuConID = 0;	
 	for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-	thCon[i] =  new ThreadConnection(i, (void *)cache.data, cache.size * define::GB, 1, remoteInfo);
-	// auto rpc_cq = ibv_create_cq(hostCon[i]->ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
-	// dpuCon[i] = new DpuConnection(hostCon[i]->ctx, rpc_cq, APP_MESSAGE_NR);
-	// dpuCon[i]->initRecv();
+		completeQueues[i] = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
+		for (int j = 0; j < dpuConPerThread; j++) {
+			dpuCons[dpuConID] = new DpuConnection(ctx, completeQueues[i], APP_MESSAGE_NR, 1024, 1024, dpuConID);
+			dpuConID++;
+		}
 	}
-
-
-	keeper = new DSDpuKeeper(thCon, remoteInfo, computeInfo, conf.machineNR);
+	Debug::notifyInfo("qp num %d", dpuConID);
+	
+	keeper = new DSDpuKeeper(&ctx, dpuCons, remoteInfo, computeInfo, conf.machineNR);
 
 	init_dma_state();
 	
 	myNodeID = keeper->getMyNodeID();
-	keeper->barrier("DpuProxy-init");
+
+	// keeper->barrier("DpuProxy-init");
 }
 
 DpuProxy::~DpuProxy() {}
@@ -48,20 +52,18 @@ void DpuProxy::registerThread() {
     return;
 
   thread_id = appID.fetch_add(1);
-  thread_tag = thread_id + (((uint64_t)this->getMyNodeID()) << 32) + 1;
 
-  iCon = thCon[thread_id];
-  this->init_dma_state();
+  completeQueue = completeQueues[thread_id];
 
   if (!has_init[thread_id]) {
     has_init[thread_id] = true;
   }
 
-  rdma_buffer = (char *)cache.data + thread_id * 12 * define::MB;
+//   rdma_buffer = (char *)cache.data + thread_id * 12 * define::MB;
 
-  for (int i = 0; i < define::kMaxCoro; ++i) {
-    rbuf[i].set_buffer(rdma_buffer + i * define::kPerCoroRdmaBuf);
-  }
+//   for (int i = 0; i < define::kMaxCoro; ++i) {
+//     rbuf[i].set_buffer(rdma_buffer + i * define::kPerCoroRdmaBuf);
+//   }
 
   dmaCon.init(&dmaConCtx, define::kMaxCoro * 2);
 }
@@ -78,7 +80,6 @@ void DpuProxy::rpc_call_dir(const RawMessage &m, uint16_t node_id,
     iCon->sendMessage2Dir(buffer, node_id, dir_id);
 }
 
-
 void DpuProxy::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
                CoroContext *ctx) {
 	if (ctx == nullptr) {
@@ -94,7 +95,6 @@ void DpuProxy::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
 	}
 }
 
-
 void DpuProxy::read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                     CoroContext *ctx) {
 #ifndef AARCH64
@@ -107,15 +107,9 @@ void DpuProxy::read_sync(char *buffer, GlobalAddress gaddr, size_t size,
 #endif
 }
 
-
-void DpuProxy::readByDma(void *buffer, uint64_t addr, size_t size, CoroContext *ctx) {
-	dmaCon.readByDma(buffer, addr, size, ctx);
+void* DpuProxy::readByDmaFixedSize(GlobalAddress gaddr, CoroContext *ctx) {
+	return this->dpuCache->get(gaddr.offset, ctx);
 }
-
-
-
-
-
 
 void DpuProxy::init_dma_state() {
 	size_t local_buffer_size = DPU_CACHE_INTERNAL_PAGE_NUM * sizeof(InternalPage);
@@ -132,14 +126,17 @@ void DpuProxy::init_dma_state() {
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("Failed DMA init: %s", doca_get_error_string(result));
 		exit(-1);
+	} else {
+		Debug::notifyInfo("DMA connect success");
 	}
-	using namespace std::placeholders;
-	dmaCon.init(&dmaConCtx, 10);
-	CoroContext ctx;
-	ctx.coro_id = 2;
-	this->dpuCache = new DpuCacheMultiCon(std::bind(&DpuProxy::readByDma, this, _1, _2, _3, _4), 
-							local_buffer, local_buffer_size, 1024);
-	char* data = (char*)dpuCache->get(0, &ctx);
-	sleep(5);
-	Debug::notifyInfo("read1111 %s", data);
+
+	this->dpuCache = new DpuCacheMultiCon(
+		[](void *buffer, uint64_t addr, size_t size, CoroContext *ctx) {
+			dmaCon.readByDma(buffer, addr, size, ctx);
+		}, local_buffer, local_buffer_size, kInternalPageSize);
+}
+
+
+bool DpuProxy::poll_dma_cq_once(uint64_t &next_coro_id) {
+	return dmaCon.poll_dma_cq(next_coro_id);
 }

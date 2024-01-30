@@ -50,6 +50,7 @@ public:
   DmaConnect() {};
   doca_error init(DmaConnectCtx *dmaConCtx, uint32_t workq_depth);
   void readByDma(void* buffer, uint64_t offset, size_t size, CoroContext *ctx= nullptr);
+  bool poll_dma_cq(uint64_t &);
 private:
   DmaConnectCtx *dmaConCtx;
   void* remote_addr;

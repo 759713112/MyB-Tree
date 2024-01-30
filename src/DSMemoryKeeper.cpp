@@ -29,7 +29,6 @@ void DSMemoryKeeper::initLocalMeta(const void *dma_export_desc, size_t dma_expor
   localMeta.lockBase = (uint64_t)dirCon[0]->lockPool;
 
   // per thread DIR
-  std::cout << dirCon[0]->ctx.lid << "lid" << std::endl;
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     localMeta.dirTh[i].lid = dirCon[i]->ctx.lid;
     localMeta.dirTh[i].rKey = dirCon[i]->dsmMR->rkey;
@@ -105,48 +104,47 @@ bool DSMemoryKeeper::connectNode(uint16_t remoteID) {
 
 void DSMemoryKeeper::connectDpu() {
 
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    auto &c = dirCon[i];
+  // for (int i = 0; i < NR_DIRECTORY; ++i) {
+  //   auto &c = dirCon[i];
 
-    for (int k = 0; k < MAX_DPU_THREAD; ++k) {
-      localMeta.dirRcQpn2dpu[k] = c->data2dpu[k]->qp_num;
-    }
-  }
+  //   for (int k = 0; k < MAX_DPU_THREAD; ++k) {
+  //     localMeta.dirRcQpn2dpu[k] = c->data2dpu[k]->qp_num;
+  //   }
+  // }
   std::string setK = "server-dpu" + std::to_string(getMyNodeID());
   memSet(setK.c_str(), setK.size(), (char *)(&localMeta), sizeof(localMeta));
 
   std::string getK = "dpu-server" + std::to_string(getMyNodeID());
   ExchangeMeta *remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
-  std::cout <<remoteMeta->dpuTh[0].gid << std::endl;
-  for (int i = 0; i < NR_DIRECTORY; ++i) {
-    auto &c = dirCon[i];
 
-    for (int k = 0; k < MAX_DPU_THREAD; ++k) {
-      auto &qp = c->data2dpu[k];
-      assert(qp->qp_type == IBV_QPT_RC);
-      modifyQPtoInit(qp, &c->ctx);
-      modifyQPtoRTR(qp, remoteMeta->dpuRcQpn2dir[k],
-                    remoteMeta->dpuTh[k].lid, remoteMeta->dpuTh[k].gid,
-                    &c->ctx);
-      modifyQPtoRTS(qp);
-    }
-  }
-  for (int i = 0; i < MAX_DPU_THREAD; ++i) {
-    dpuConnectInfo->dpuRKey[i] = remoteMeta->dpuTh[i].rKey;
-    dpuConnectInfo->dpuMessageQPN[i] = remoteMeta->dpuUdQpn2dir[i];
+  // for (int i = 0; i < NR_DIRECTORY; ++i) {
+  //   auto &c = dirCon[i];
+  //   for (int k = 0; k < MAX_DPU_THREAD; ++k) {
+  //     auto &qp = c->data2dpu[k];
+  //     assert(qp->qp_type == IBV_QPT_RC);
+  //     modifyQPtoInit(qp, &c->ctx);
+  //     modifyQPtoRTR(qp, remoteMeta->dpuRcQpn2dir[k],
+  //                   remoteMeta->dpuTh[k].lid, remoteMeta->dpuTh[k].gid,
+  //                   &c->ctx);
+  //     modifyQPtoRTS(qp);
+  //   }
+  // }
+  // for (int i = 0; i < MAX_DPU_THREAD; ++i) {
+  //   dpuConnectInfo->dpuRKey[i] = remoteMeta->dpuTh[i].rKey;
+  //   dpuConnectInfo->dpuMessageQPN[i] = remoteMeta->dpuUdQpn2dir[i];
 
-    for (int k = 0; k < NR_DIRECTORY; ++k) {
-      struct ibv_ah_attr ahAttr;
-      fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
-                 &dirCon[k]->ctx);
-          fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
-               &dirCon[k]->ctx);
-      dpuConnectInfo->dirToDpuAh[k][i] = ibv_create_ah(dirCon[k]->ctx.pd, &ahAttr);
+  //   for (int k = 0; k < NR_DIRECTORY; ++k) {
+  //     struct ibv_ah_attr ahAttr;
+  //     fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
+  //                &dirCon[k]->ctx);
+  //         fillAhAttr(&ahAttr, remoteMeta->dpuTh[i].lid, remoteMeta->dpuTh[i].gid,
+  //              &dirCon[k]->ctx);
+  //     dpuConnectInfo->dirToDpuAh[k][i] = ibv_create_ah(dirCon[k]->ctx.pd, &ahAttr);
 
-      assert(dpuConnectInfo->dirToDpuAh[k][i]);
-    }
+  //     assert(dpuConnectInfo->dirToDpuAh[k][i]);
+  //   }
 
-  }
+  // }
   free(remoteMeta);
   std::cout << "connect to dpu ok" << std::endl;
 }
@@ -192,6 +190,44 @@ void DSMemoryKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMe
       assert(info.dirToAppAh[k][i]);
     }
   }
+
+  // auto recvs = new ibv_recv_wr[100];
+  // auto recv_sgl = new ibv_sge[100];
+
+  // for (int k = 0; k < 100; ++k) {
+  //     auto &s = recv_sgl[k];
+  //     memset(&s, 0, sizeof(s));
+
+  //     s.addr = (uint64_t)dirCon[0]->dsmPool + k * MESSAGE_SIZE;
+  //     s.length = MESSAGE_SIZE;
+  //     s.lkey = dirCon[0]->dsmMR->lkey;
+
+  //     auto &r = recvs[k];
+  //     memset(&r, 0, sizeof(r));
+
+  //     r.sg_list = &s;
+  //     r.num_sge = 1;
+  //     r.next = (k == 99) ? NULL : &recvs[k + 1];
+  // }
+
+  // struct ibv_recv_wr *bad;
+
+  // if (ibv_post_recv(dirCon[0]->data2app[0][0], &recvs[0], &bad)) {
+  //   Debug::notifyError("Receive failed.");
+  // } 
+  // memcpy((char*)(dirCon[0]->dsmPool), "bbbbbbbbb\0", 10);
+  // memcpy((char*)(dirCon[0]->dsmPool) + 2048, "bbbbbbbbb\0", 10);
+  // Debug::notifyInfo("message %d", *((char*)(dirCon[0]->dsmPool) + 2048));
+  // struct ibv_wc wc;
+  // Debug::notifyError("waiting Received");
+  // while (pollOnce(dirCon[0]->cq, 1, &wc) == 0);
+  // rdmaSend(dirCon[0]->data2app[0][0], (uint64_t)dirCon[0]->dsmPool, MESSAGE_SIZE, dirCon[0]->dsmMR->lkey);
+  // while (pollOnce(dirCon[0]->cq, 1, &wc) == 0);
+
+  // rdmaSend(dirCon[0]->data2app[0][0], (uint64_t)dirCon[0]->dsmPool + 2048, MESSAGE_SIZE, dirCon[0]->dsmMR->lkey);
+  // Debug::notifyError("Received");
+
+  
 }
 
 

@@ -95,7 +95,7 @@ int pollOnce(ibv_cq *cq, int pollNumber, struct ibv_wc *wc);
 bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
               ibv_ah *ah, uint32_t remoteQPN, bool isSignaled = false);
 
-bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
+bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey, bool isSignaled = false,
               int32_t imm = -1);
 
 bool rdmaReceive(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,

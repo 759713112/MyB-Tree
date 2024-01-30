@@ -77,7 +77,6 @@ void DSM::registerThread() {
 
 void DSM::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
                CoroContext *ctx) {
-  Debug::notifyError("Failed DMA init: %o", gaddr.offset);
   if (ctx == nullptr) {
     rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
              remoteInfo[gaddr.nodeID].dsmBase + gaddr.offset, size,
@@ -584,9 +583,6 @@ DpuRequest* DSM::get_sendpool_to_dpu(size_t size) {
 }
 
 bool DSM::send_request_to_dpu(DpuRequest* r, size_t size) {
-  iCon->dpuConnect->sendDpuRequest(
-      r, remoteInfo[r->node_id].dpuRequestQPN[r->node_id % MAX_DPU_THREAD], 
-      remoteInfo[r->node_id].appToDpuAh[r->app_id][r->node_id]
-  );
+  iCon->dpuConnect->sendDpuRequest(r);
 }
 

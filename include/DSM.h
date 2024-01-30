@@ -139,10 +139,8 @@ public:
     return size;
   }
   
-
   DpuRequest* get_sendpool_to_dpu(size_t size);
   bool send_request_to_dpu(DpuRequest* r, size_t size);
-  uint64_t poll_dpu_connect_cq(int count = 1);
 protected:
   DSM(const DSMConfig &conf);
   ~DSM();
@@ -164,7 +162,7 @@ protected:
   uint32_t myNodeID;
 
   RemoteConnection *remoteInfo;
-  ThreadConnection *thCon[MAX_APP_THREAD];
+  ThreadConnection *thCon[MAX_DPU_THREAD];
   DSMKeeper *keeper;
 
   struct sockaddr_in serverAddress;
@@ -198,6 +196,27 @@ public:
     pollWithCQ(iCon->rpc_cq, 1, &wc);
     return (RawMessage *)iCon->message->getMessage();
   }
+
+  void rpcCallDpu(Key k, uint16_t coro_id) {
+    static thread_local int next_target_dpu_thread =  0;
+        // (getMyThreadID() + getMyNodeID()) % MAX_DPU_THREAD;
+
+    auto req = (DpuRequest*)iCon->dpuConnect->getSendPool();
+    req->node_id = myNodeID;
+    req->app_id = thread_id;
+    req->coro_id = coro_id;
+    req->k = k;
+    iCon->dpuConnect->sendDpuRequest(req);
+    // next_target_dpu_thread = (next_target_dpu_thread + 1) % MAX_DPU_THREAD;
+    // Debug::notifyInfo("Send req to dpu thread: %d", next_target_dpu_thread);
+  }
+
+  DpuResponse* rpc_dpu_wait() {
+    ibv_wc wc;
+    pollWithCQ(iCon->cq2dpu, 1, &wc);
+    return (DpuResponse *)iCon->dpuConnect->getMessage();
+  }
+
   void init_socket();
   void broadcast_new_root_to_client(const RawMessage &m); 
   static void catch_root_change(); 

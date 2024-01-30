@@ -147,7 +147,6 @@ doca_error_t DmaConnectCtx::connect(
 		doca_dma_destroy(this->dma);
 		return result;
 	}
-
 	result = init_core_objects(&this->state, WORKQ_DEPTH, MAX_DOCA_BUFS);
 	if (result != DOCA_SUCCESS) {
 		dma_cleanup(&this->state, this->dma);
@@ -269,30 +268,29 @@ void DmaConnect::readByDma(void *buffer, uint64_t offset, size_t size, CoroConte
 		Debug::notifyError("Failed to submit DMA job: %s", doca_get_error_string(result));
 		return;
 	}
-	//(*ctx->yield)(*ctx->master);
+	if (ctx != nullptr) {
+		(*ctx->yield)(*ctx->master);
+	}
 	return;
+}
+
+bool DmaConnect::poll_dma_cq(uint64_t &id) {
 	struct doca_event event = {0};
 	/* Wait for job completion */
-	while ((result = doca_workq_progress_retrieve(this->workq, &event, DOCA_WORKQ_RETRIEVE_FLAGS_NONE)) ==
-		DOCA_ERROR_AGAIN) {
-		// nanosleep(&ts, &ts);
+	doca_error_t result = doca_workq_progress_retrieve(this->workq, &event, DOCA_WORKQ_RETRIEVE_FLAGS_NONE);
+	if (result == DOCA_ERROR_AGAIN) {
+		return false;
 	}
-
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("Failed to retrieve DMA job: %s", doca_get_error_string(result));
-		return;
+		return false;
 	}
-
 	/* event result is valid */
 	result = (doca_error_t)event.result.u64;
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("DMA job event returned unsuccessfully: %s", doca_get_error_string(result));
-		return;
+		return false;
 	}
-	assert(event.user_data.u64 == ctx->coro_id);
-
-	Debug::notifyInfo("Remote DMA copy was done Successfully");
-	((char*)buffer)[1024 - 1] = '\0';
-	Debug::notifyInfo("Memory content: %s", (char*)buffer);
-
+	id = event.user_data.u64;
+	return true;
 }

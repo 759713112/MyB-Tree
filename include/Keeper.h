@@ -39,18 +39,16 @@ struct ExchangeMeta {
   uint32_t dirUdQpn[NR_DIRECTORY];
 
   uint32_t appRcQpn2dir[MAX_APP_THREAD][NR_DIRECTORY];
-
   uint32_t dirRcQpn2app[NR_DIRECTORY][MAX_APP_THREAD];
 
 
   ExPerThread dpuTh[MAX_DPU_THREAD];
-  uint32_t dpuRcQpn2dir[MAX_DPU_THREAD];
-  uint32_t dpuUdQpn2app[MAX_DPU_THREAD];
-  uint32_t dpuUdQpn2dir[MAX_DPU_THREAD];
+  uint32_t dpuRcQpn2app[MAX_DPU_THREAD * 4];
+  // uint32_t dpuRcQpn2dir[MAX_DPU_THREAD];
+  // uint32_t dpuUdQpn2dir[MAX_DPU_THREAD];
+  //uint32_t dirRcQpn2dpu[MAX_DPU_THREAD];
 
-  uint32_t dirRcQpn2dpu[MAX_DPU_THREAD];
-
-  uint32_t appUdQpn2dpu[MAX_APP_THREAD];
+  uint32_t appRcQpn2dpu[MAX_APP_THREAD];
   // uint32_t app2dpu[MAX_DPU_THREAD];
   // uint32_t dpu2app[]
 

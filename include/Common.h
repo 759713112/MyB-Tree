@@ -31,7 +31,7 @@
 
 #define ADD_ROUND(x, n) ((x) = ((x) + 1) % (n))
 
-#define MESSAGE_SIZE 96 // byte
+#define MESSAGE_SIZE 1124 // byte
 
 #define POST_RECV_PER_RC_QP 128
 
@@ -39,7 +39,7 @@
 
 // { app thread
 #define MAX_APP_THREAD 8
-#define MAX_DPU_THREAD 1
+#define MAX_DPU_THREAD 16
 
 #define APP_MESSAGE_NR 96
 
@@ -52,6 +52,8 @@
 
 #define NODE_ID_FOR_DPU 4096
 // }
+
+#define SIGNAL_BATCH 31
 
 void bindCore(uint16_t core);
 char *getIP();
@@ -71,10 +73,20 @@ struct CoroContext {
   CoroYield *yield;
   CoroCall *master;
   int coro_id;
-  CoroContext *next;
-  void appendToWaitQueue();
-private:
+  void appendToWaitQueue() {
+    this->wait_queue.push(this->coro_id);
+    (*this->yield)(*this->master);
+  }
+  static bool popWaitQueue(uint64_t &next_coro_id) {
+    if (wait_queue.size() == 0) return false;
+    next_coro_id = wait_queue.front();
+    wait_queue.pop();
+    return true;
+  }
+  static int getQueueSize() { return wait_queue.size(); }
   static thread_local std::queue<uint16_t> wait_queue;
+private:
+  
 
 };
 
@@ -167,7 +179,7 @@ inline void compiler_barrier() { asm volatile("" ::: "memory"); }
 #define DMA_PCIE_ADDR "b5:00.0"
 #define DMA_PCIE_ADDR_ON_DPU "03:00.0"
 #define DMA_PCIE_ADDR_ON_HOST "b5:00.0"
-#define MAX_DOCA_BUFS 128
+#define MAX_DOCA_BUFS 256
 
 #define DPU_CACHE_INTERNAL_PAGE_NUM 1048576 //2 ^20 
 #endif /* __COMMON_H__ */

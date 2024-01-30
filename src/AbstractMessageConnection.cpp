@@ -11,7 +11,9 @@ AbstractMessageConnection::AbstractMessageConnection(
   send_cq = ibv_create_cq(ctx.ctx, 128, NULL, NULL, 0);
 
   createQueuePair(&message, type, send_cq, cq, &ctx);
-  modifyUDtoRTS(message, &ctx);
+  if (type == IBV_QPT_UD) {
+      modifyUDtoRTS(message, &ctx);
+  }
 
   messagePool = hugePageAlloc(2 * messageNR * MESSAGE_SIZE);
   messageMR = createMemoryRegion((uint64_t)messagePool,

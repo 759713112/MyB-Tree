@@ -84,34 +84,6 @@ Timer bench_timer;
 std::atomic<int64_t> warmup_cnt{0};
 std::atomic_bool ready{false};
 
-
-void thread_run_for_test(int id) {
-  dsm->registerThread();
-  unsigned int seed = rdtsc();
-  struct zipf_gen_state state;
-  mehcached_zipf_init(&state, kKeySpace, zipfan,
-                      (rdtsc() & (0x0000ffffffffffffull)) ^ id);
-
-  Timer timer;
-  while (true) {
-
-    uint64_t dis = mehcached_zipf_next(&state);
-    uint64_t key = to_key(dis);
-    
-    Value v;
-
-    auto r = dsm->get_sendpool_to_dpu(0);
-    r->k = key;
-    r->v = v;
-    if (rand_r(&seed) % 100 < kReadRatio) { // GET
-      r->type = SEARCH;
-
-    } else {
-      r->type = INSERT;
-    }
-    dsm->send_request_to_dpu(r, 0);
-  }
-}
 void thread_run(int id) {
 
   bindCore(id);
@@ -127,7 +99,19 @@ void thread_run(int id) {
   uint64_t my_id = kThreadCount * dsm->getMyNodeID() + id;
 
   printf("I am thread %ld on compute nodes\n", my_id);
-
+  bench_timer.begin();
+  for (int i = 0; i < 10; i++) {
+      dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
+  }
+  while (true) {
+    bench_timer.begin();
+    auto rsp = dsm->rpc_dpu_wait();
+    Debug::debugCur("Receive response: %d, receive latency %ld", rsp->coro_id, bench_timer.end());
+    bench_timer.begin();
+    dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
+    // dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
+  }
+  
   if (id == 0) {
     bench_timer.begin();
   }
@@ -160,6 +144,7 @@ void thread_run(int id) {
 
   while (warmup_cnt.load() != 0)
     ;
+
 
 #ifdef USE_CORO
   tree->run_coroutine(coro_func, id, kCoroCnt);
@@ -210,7 +195,7 @@ void parse_args(int argc, char *argv[]) {
   kReadRatio = atoi(argv[3]);
   kThreadCount = atoi(argv[4]);
 
-  printf("kNodeCount %d, kMemoryNodeCount, kReadRatio %d, kThreadCount %d\n", kNodeCount, kMemoryNodeCount,
+  printf("kNodeCount %d, kMemoryNodeCount %d, kReadRatio %d, kThreadCount %d\n", kNodeCount, kMemoryNodeCount,
          kReadRatio, kThreadCount);
 }
 
@@ -266,7 +251,10 @@ int main(int argc, char *argv[]) {
   config.machineNR = kNodeCount;
   config.memoryNR = kMemoryNodeCount;
   dsm = DSM::getInstance(config);
-    // sleep(100000);
+  for (int i = 0; i < kThreadCount; i++) {
+    th[i] = std::thread(thread_run, i);
+  }
+  sleep(100000);
   dsm->registerThread();
   tree = new Tree(dsm);
 
