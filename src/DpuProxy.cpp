@@ -22,12 +22,12 @@ DpuProxy::DpuProxy(const DSMConfig &conf) : DSM(conf) {
 	
 	Debug::notifyInfo("number of servers (colocated MN/CN): %d", conf.machineNR);
 
-	int dpuConPerThread = std::max((conf.machineNR * MAX_APP_THREAD) / MAX_DPU_THREAD, 1u);
+	int dpuConPerThread = (conf.machineNR * MAX_APP_THREAD + MAX_DPU_THREAD - 1) / MAX_DPU_THREAD;
 	int dpuConID = 0;	
 	for (int i = 0; i < MAX_DPU_THREAD; ++i) {
 		completeQueues[i] = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
 		for (int j = 0; j < dpuConPerThread; j++) {
-			dpuCons[dpuConID] = new DpuConnection(ctx, completeQueues[i], APP_MESSAGE_NR, 1024, 1024, dpuConID);
+			dpuCons[dpuConID] = new DpuConnection(ctx, completeQueues[i], APP_MESSAGE_NR, 1088, 64, dpuConID);
 			dpuConID++;
 		}
 	}
@@ -38,7 +38,7 @@ DpuProxy::DpuProxy(const DSMConfig &conf) : DSM(conf) {
 	init_dma_state();
 	
 	myNodeID = keeper->getMyNodeID();
-
+	auto t =  new std::thread(&DSM::catch_root_change);
 	// keeper->barrier("DpuProxy-init");
 }
 
@@ -58,12 +58,6 @@ void DpuProxy::registerThread() {
   if (!has_init[thread_id]) {
     has_init[thread_id] = true;
   }
-
-//   rdma_buffer = (char *)cache.data + thread_id * 12 * define::MB;
-
-//   for (int i = 0; i < define::kMaxCoro; ++i) {
-//     rbuf[i].set_buffer(rdma_buffer + i * define::kPerCoroRdmaBuf);
-//   }
 
   dmaCon.init(&dmaConCtx, define::kMaxCoro * 2);
 }
@@ -111,9 +105,18 @@ void* DpuProxy::readByDmaFixedSize(GlobalAddress gaddr, CoroContext *ctx) {
 	return this->dpuCache->get(gaddr.offset, ctx);
 }
 
+void* DpuProxy::readWithoutCache(GlobalAddress gaddr, CoroContext *ctx) {
+	static thread_local int bias = 0;
+	auto buffer = local_buffer + (this->getMyThreadID() * 16 + ctx->coro_id) * 1024;
+	dmaCon.readByDma(buffer, gaddr.offset, 1024, ctx);
+	
+	bias = (bias + 1) % 1024;
+	return buffer;
+}
+
 void DpuProxy::init_dma_state() {
 	size_t local_buffer_size = DPU_CACHE_INTERNAL_PAGE_NUM * sizeof(InternalPage);
-	void* local_buffer = hugePageAlloc(local_buffer_size);
+	local_buffer = hugePageAlloc(local_buffer_size);
 #ifndef AARCH64
 	auto result = dmaConCtx.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
 				(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, local_buffer, local_buffer_size,
@@ -139,4 +142,82 @@ void DpuProxy::init_dma_state() {
 
 bool DpuProxy::poll_dma_cq_once(uint64_t &next_coro_id) {
 	return dmaCon.poll_dma_cq(next_coro_id);
+}
+
+#include <cstring>
+#include <arpa/inet.h>
+#include <unistd.h>
+extern GlobalAddress g_root_ptr;
+extern int g_root_level;
+extern bool enable_cache;
+
+InternalPage* root_node;
+void DpuProxy::catch_root_change() {
+  std::cout << "start catch broadcast" << std::endl;
+  int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (udpSocket == -1) {
+        std::cerr << "Error creating socket\n";
+        exit(-1);
+    }
+
+    int broadcastEnable = 1;
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+        std::cerr << "Error setting socket options\n";
+        close(udpSocket);
+        exit(-1);
+    }
+
+    struct sockaddr_in serverAddress, clientAddress;
+    std::memset(&serverAddress, 0, sizeof(serverAddress));
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(12345); // Port number
+    serverAddress.sin_addr.s_addr = inet_addr("192.168.6.255");
+    int val = 1;
+    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
+    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
+    if (bind(udpSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
+        std::cerr << "Error binding socket\n";
+        close(udpSocket);
+        exit(-1);
+    }
+	DmaConnectCtx dmaCtx;
+	size_t local_buffer_size = 2 * sizeof(InternalPage);
+	void* local_buffer = malloc(local_buffer_size);
+#ifndef AARCH64
+	auto result = dmaCtx.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
+				(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, local_buffer, local_buffer_size,
+				DMA_PCIE_ADDR_ON_HOST);
+#else
+	auto result = dmaCtx.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
+		(void*)this->remoteInfo[0].dsmBase, conf.dsmSize * define::GB, local_buffer, local_buffer_size, DMA_PCIE_ADDR_ON_DPU);
+#endif
+
+	dmaCon.init(&dmaCtx, 2);
+    char buffer[1024];
+	int flag = 0;
+    while (true) {
+      
+      socklen_t clientAddressLength = sizeof(clientAddress);
+      ssize_t receivedBytes = recvfrom(udpSocket, buffer, sizeof(buffer), 0, (struct sockaddr*)&clientAddress, &clientAddressLength);
+      if (receivedBytes == -1 || receivedBytes != sizeof(RawMessage)) {
+          std::cerr << "Error receiving message\n";
+          close(udpSocket);
+          exit(-1);
+      }
+      RawMessage* m = (RawMessage*)buffer;
+      if (g_root_level < m->level) {
+          g_root_ptr = m->addr;
+          g_root_level = m->level;
+          if (g_root_level >= 3) {
+            enable_cache = true;
+          }
+		//   dmaCon
+		void* new_buffer = local_buffer + (flag * sizeof(InternalPage));
+		dmaCon.readByDma(new_buffer, g_root_ptr.offset, 1024);
+		root_node = (InternalPage*)new_buffer;
+		root_node->check_consistent();
+		flag ^= 1;	
+        std::cout << "Received change root to" << g_root_ptr << std::endl;
+      }
+    }
 }

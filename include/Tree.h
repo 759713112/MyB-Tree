@@ -49,6 +49,8 @@ public:
               int coro_id = 0);
   bool search(const Key &k, Value &v, CoroContext *cxt = nullptr,
               int coro_id = 0);
+  bool searchWithDpu(const Key &k, Value &v, CoroContext *cxt = nullptr, 
+              int coro_id = 0);
   void del(const Key &k, CoroContext *cxt = nullptr, int coro_id = 0);
 
   uint64_t range_query(const Key &from, const Key &to, Value *buffer,

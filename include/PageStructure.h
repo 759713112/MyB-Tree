@@ -16,6 +16,7 @@ private:
   friend class LeafPage;
   friend class Tree;
   friend class IndexCache;
+  friend class DpuProcessor;
 
 public:
   Header() {
@@ -87,6 +88,7 @@ private:
 
   friend class Tree;
   friend class IndexCache;
+  friend class DpuProcessor;
 
 public:
   // this is called when tree grows
@@ -132,7 +134,6 @@ public:
     succ = cal_crc == this->crc;
 #endif
     succ = succ && (rear_version == front_version);
-
     return succ;
   }
 
@@ -167,6 +168,7 @@ private:
   uint8_t rear_version;
 
   friend class Tree;
+  friend class DpuProcessor;
 
 public:
   LeafPage(uint32_t level = 0) {

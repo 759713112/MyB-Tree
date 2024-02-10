@@ -483,10 +483,16 @@ uint64_t DSM::poll_rdma_cq(int count) {
 bool DSM::poll_rdma_cq_once(uint64_t &wr_id) {
   ibv_wc wc;
   int res = pollOnce(iCon->cq, 1, &wc);
+  
+  if (res <= 0) return false;
 
-  wr_id = wc.wr_id;
+  if (wc.opcode == IBV_WC_RECV) {
+    wr_id = wc.imm_data;
+  } else {
+    wr_id = wc.wr_id;
+  }
+  return true;
 
-  return res == 1;
 }
 #include <iostream>
 #include <cstring>
@@ -496,7 +502,6 @@ extern GlobalAddress g_root_ptr;
 extern int g_root_level;
 extern bool enable_cache;
 void DSM::catch_root_change() {
-  std::cout << "start catch broadcast" << std::endl;
   int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udpSocket == -1) {
         std::cerr << "Error creating socket\n";
@@ -514,7 +519,7 @@ void DSM::catch_root_change() {
     std::memset(&serverAddress, 0, sizeof(serverAddress));
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(12345); // Port number
-    serverAddress.sin_addr.s_addr = INADDR_ANY;
+    serverAddress.sin_addr.s_addr = inet_addr("192.168.6.255");
     int val = 1;
     setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
     setsockopt(udpSocket, SOL_SOCKET, SO_REUSEPORT, &val, sizeof(val));
@@ -533,7 +538,6 @@ void DSM::catch_root_change() {
           std::cerr << "Error receiving message\n";
           close(udpSocket);
           exit(-1);
-
       }
       RawMessage* m = (RawMessage*)buffer;
       if (g_root_level < m->level) {
@@ -544,7 +548,7 @@ void DSM::catch_root_change() {
           }
           std::cout << "Received change root to" << g_root_ptr << std::endl;
       }
-    } 
+    }
 }
 
 
@@ -564,7 +568,7 @@ void DSM::init_socket() {
     std::memset(&serverAddress, 0, sizeof(serverAddress));
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(12345); // Port number
-    serverAddress.sin_addr.s_addr = INADDR_BROADCAST; // Broadcast address
+    serverAddress.sin_addr.s_addr = inet_addr("192.168.6.255"); // Broadcast address
 }
 void DSM::broadcast_new_root_to_client(const RawMessage &m) {
     if (sendto(udpSocket, &m, sizeof(m), 0, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == -1) {
@@ -584,5 +588,28 @@ DpuRequest* DSM::get_sendpool_to_dpu(size_t size) {
 
 bool DSM::send_request_to_dpu(DpuRequest* r, size_t size) {
   iCon->dpuConnect->sendDpuRequest(r);
+}
+
+char* DSM::rpcCallDpu(Key k, uint16_t coro_id, CoroContext *ctx) {
+
+    auto req = (DpuRequest*)iCon->dpuConnect->getSendPool();
+    req->node_id = myNodeID;
+    req->app_id = thread_id;
+    req->coro_id = coro_id;
+    req->k = k;
+    iCon->dpuConnect->sendDpuRequest(req);
+
+    if (ctx != nullptr) {
+      (*ctx->yield)(*ctx->master);
+    } else {
+      ibv_wc wc;
+      pollWithCQ(iCon->cq, 1, &wc);
+    }
+    auto rsp =  (DpuResponse *)iCon->dpuConnect->getMessage();
+
+    if (rsp->coro_id != coro_id) {
+      Debug::notifyInfo("coro_id: %d, response coro_id %d", coro_id, rsp->coro_id);
+    }
+    return rsp->buffer;
 }
 

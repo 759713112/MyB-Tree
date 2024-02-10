@@ -9,11 +9,10 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
     : threadID(threadID), remoteInfo(remoteInfo) {
   createContext(&ctx);
 
-  cq2dpu = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
-  dpuConnect = new DpuConnection(ctx, cq2dpu, APP_MESSAGE_NR, 1024, 1024);
+  cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
+  dpuConnect = new DpuConnection(ctx, cq, APP_MESSAGE_NR, 64, 1088);
 
   this->cachePool = cachePool;
-#ifndef AARCH64
 
   // rpc_cq = cq;
   rpc_cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
@@ -22,9 +21,6 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
   cacheMR = createMemoryRegion((uint64_t)cachePool, cacheSize, &ctx);
   cacheLKey = cacheMR->lkey;
 
-
-#endif
-  cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
   // dir, RC
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     data[i] = new ibv_qp *[machineNR];

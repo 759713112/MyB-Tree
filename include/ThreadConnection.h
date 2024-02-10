@@ -17,7 +17,6 @@ struct ThreadConnection {
 
   RawMessageConnection *message;
 
-  ibv_cq *cq2dpu;
   DpuConnection *dpuConnect;
 
 

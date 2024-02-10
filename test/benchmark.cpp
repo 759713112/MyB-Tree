@@ -13,7 +13,7 @@
 //////////////////// workload parameters /////////////////////
 
 // #define USE_CORO
-const int kCoroCnt = 3;
+const int kCoroCnt = 8;
 
 int kReadRatio;
 int kThreadCount;
@@ -100,17 +100,17 @@ void thread_run(int id) {
 
   printf("I am thread %ld on compute nodes\n", my_id);
   bench_timer.begin();
-  for (int i = 0; i < 10; i++) {
-      dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
-  }
-  while (true) {
-    bench_timer.begin();
-    auto rsp = dsm->rpc_dpu_wait();
-    Debug::debugCur("Receive response: %d, receive latency %ld", rsp->coro_id, bench_timer.end());
-    bench_timer.begin();
-    dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
-    // dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
-  }
+  // for (int i = 0; i < 10; i++) {
+  //     dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
+  // }
+  // while (true) {
+  //   bench_timer.begin();
+  //   auto rsp = dsm->rpc_dpu_wait();
+  //   Debug::debugCur("Receive response: , receive latency %ld", bench_timer.end());
+  //   bench_timer.begin();
+  //   dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
+  //   // dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
+  // }
   
   if (id == 0) {
     bench_timer.begin();
@@ -251,15 +251,12 @@ int main(int argc, char *argv[]) {
   config.machineNR = kNodeCount;
   config.memoryNR = kMemoryNodeCount;
   dsm = DSM::getInstance(config);
-  for (int i = 0; i < kThreadCount; i++) {
-    th[i] = std::thread(thread_run, i);
-  }
-  sleep(100000);
+
   dsm->registerThread();
   tree = new Tree(dsm);
 
   if (dsm->getMyNodeID() == 0) {
-    for (uint64_t i = 1; i < 1024000; ++i) {
+    for (uint64_t i = 1; i < 102400; ++i) {
       tree->insert(to_key(i), i * 2);
     }
   }
@@ -290,6 +287,7 @@ int main(int argc, char *argv[]) {
     uint64_t all_tp = 0;
     for (int i = 0; i < kThreadCount; ++i) {
       all_tp += tp[i][0];
+      printf("thread %d tp %lld\n", i, tp[i][0]);
     }
     uint64_t cap = all_tp - pre_tp;
     pre_tp = all_tp;
@@ -300,7 +298,7 @@ int main(int argc, char *argv[]) {
       all += (cache_hit[i][0] + cache_miss[i][0]);
       hit += cache_hit[i][0];
     }
-
+    printf("cache hit : %ld, all: %ld\n", hit, all);
     clock_gettime(CLOCK_REALTIME, &s);
 
     if (++count % 3 == 0 && dsm->getMyNodeID() == 0) {

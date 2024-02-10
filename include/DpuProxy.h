@@ -35,8 +35,9 @@ public:
               CoroContext *ctx) override;
   void read_sync(char *buffer, GlobalAddress gaddr, size_t size,
                     CoroContext *ctx);
-  
+
   void* readByDmaFixedSize(GlobalAddress gaddr, CoroContext *ctx);
+  void* readWithoutCache(GlobalAddress gaddr, CoroContext *ctx);
 
   bool poll_dma_cq_once(uint64_t &next_coro_id);
 
@@ -58,16 +59,17 @@ public:
   void rpc_rsp_dpu(void* buffer, const DpuRequest& originReq) {
 
     auto rsp = (DpuResponse*)dpuCons[originReq.wr_id]->getSendPool();
-    memcpy(rsp->buffer, buffer, 10);
+    memcpy(rsp->buffer, buffer, kInternalPageSize);
+    rsp->coro_id = originReq.coro_id;
 
-    dpuCons[originReq.wr_id]->sendDpuResponse(rsp);                        
+    dpuCons[originReq.wr_id]->sendDpuResponse(rsp, originReq.coro_id);                        
   }
-
 
 private:
   DpuProxy(const DSMConfig &conf);
   ~DpuProxy();
   void init_dma_state();
+  void catch_root_change();
 
   RemoteConnection *computeInfo;
   // ThreadConnection *hostCon[MAX_DPU_THREAD];
@@ -82,5 +84,6 @@ private:
   DpuCache *dpuCache;
   DSDpuKeeper *keeper; 
   RdmaContext ctx;
+  void* local_buffer;
 };
 #endif /* __DPU_PROXY_H__ */

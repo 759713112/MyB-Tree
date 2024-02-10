@@ -191,7 +191,7 @@ int main(int argc, char *argv[]) {
                        (double)(e.tv_nsec - s.tv_nsec) / 1000;
 
     uint64_t all_tp = 0;
-    for (int i = 0; i < kThreadCount; ++i) {
+    for (int i = 0; i < MAX_DPU_THREAD; ++i) {
       all_tp += dpu_tp[i][0];
       printf("thread %d tp %lld\n", i, dpu_tp[i][0]);
     }

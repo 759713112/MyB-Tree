@@ -230,11 +230,11 @@ doca_error DmaConnect::init(DmaConnectCtx *dmaConCtx, uint32_t workq_depth) {
 		/* Construct DOCA buffer for each address range */
 		res = dmaConCtx->getSrcDocaBuf(&this->src_doca_buf[i]);
 		if (res != DOCA_SUCCESS) {
-		return res;
+			return res;
 		}
 		res = dmaConCtx->getDstDocaBuf(&this->dst_doca_buf[i]);
 		if (res != DOCA_SUCCESS) {
-		return res;
+			return res;
 		}
 	}
 	return res;
@@ -242,14 +242,17 @@ doca_error DmaConnect::init(DmaConnectCtx *dmaConCtx, uint32_t workq_depth) {
 
 void DmaConnect::readByDma(void *buffer, uint64_t offset, size_t size, CoroContext *ctx) {
 
-
 	struct doca_dma_job_memcpy dma_job;
-	auto result = doca_buf_set_data(this->src_doca_buf[ctx->coro_id], (void*)remote_addr + offset, size);
+	int doca_buf_index = 0;
+	if (ctx != nullptr) {
+		doca_buf_index = ctx->coro_id;
+	}
+	auto result = doca_buf_set_data(this->src_doca_buf[doca_buf_index], (void*)remote_addr + offset, size);
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("Failed to set data for SRC DOCA buffer: %s", doca_get_error_string(result));
 		return;
 	}
-	result = doca_buf_set_data(this->dst_doca_buf[ctx->coro_id], buffer, 0);
+	result = doca_buf_set_data(this->dst_doca_buf[doca_buf_index], buffer, 0);
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("Failed to set data for DST DOCA buffer: %s", doca_get_error_string(result));
 		return;
@@ -258,9 +261,9 @@ void DmaConnect::readByDma(void *buffer, uint64_t offset, size_t size, CoroConte
 	dma_job.base.type = DOCA_DMA_JOB_MEMCPY;
 	dma_job.base.flags = DOCA_JOB_FLAGS_NONE;
 	dma_job.base.ctx = this->doca_ctx;
-	dma_job.dst_buff = this->dst_doca_buf[ctx->coro_id];
-	dma_job.src_buff = this->src_doca_buf[ctx->coro_id];
-	dma_job.base.user_data.u64 = ctx->coro_id; 
+	dma_job.dst_buff = this->dst_doca_buf[doca_buf_index];
+	dma_job.src_buff = this->src_doca_buf[doca_buf_index];
+	dma_job.base.user_data.u64 = doca_buf_index; 
 
 	/* Enqueue DMA job */
 	result = doca_workq_submit(this->workq, &dma_job.base);
@@ -270,6 +273,9 @@ void DmaConnect::readByDma(void *buffer, uint64_t offset, size_t size, CoroConte
 	}
 	if (ctx != nullptr) {
 		(*ctx->yield)(*ctx->master);
+	} else {
+		uint64_t temp;
+		while (!poll_dma_cq(temp)) {}
 	}
 	return;
 }

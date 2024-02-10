@@ -101,7 +101,7 @@ void thread_run(int id) {
 
 
 #ifdef USE_CORO
-  dpuProcessor->run_coroutine(id, kCoroCnt);
+  dpuProcessor->run_coroutine_cache_test(id, kCoroCnt);
 #else
 
   /// without coro

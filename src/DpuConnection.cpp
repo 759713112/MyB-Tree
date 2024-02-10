@@ -33,7 +33,7 @@ void DpuConnection::sendDpuRequest(DpuRequest *m) {
   ++sendCounter;
 }
 
-void DpuConnection::sendDpuResponse(DpuResponse *m) {
+void DpuConnection::sendDpuResponse(DpuResponse *m, int32_t imm) {
 
   if ((sendCounter & SIGNAL_BATCH) == 0 && sendCounter > 0) {
     ibv_wc wc;
@@ -41,7 +41,7 @@ void DpuConnection::sendDpuResponse(DpuResponse *m) {
   }
 
   rdmaSend(message, (uint64_t)m, sizeof(DpuResponse),
-           messageLkey, (sendCounter & SIGNAL_BATCH) == 0);
+           messageLkey, (sendCounter & SIGNAL_BATCH) == 0, imm);
 
   ++sendCounter;
 }

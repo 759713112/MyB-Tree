@@ -7,6 +7,13 @@
 #include "Tree.h"
 #include "DpuProxy.h"
 
+struct DpuSearchResult {
+  uint8_t level;
+  GlobalAddress slibing;
+  GlobalAddress next_level;
+  InternalPage *cur_page;
+};
+
 class DpuProcessor {
 
 private:
@@ -28,6 +35,12 @@ public:
     void coro_master_cache_test(CoroYield &yield, int coro_cnt);
 
     ~DpuProcessor();
+private:
+    GlobalAddress get_root_ptr(CoroContext *cxt, int coro_id);
+    InternalPage* get_root_node();
+    void internal_page_search(InternalPage *page, const Key &k, DpuSearchResult &result);
+    bool page_search(GlobalAddress page_addr, const Key &k, DpuSearchResult &result, 
+                    CoroContext *cxt, int coro_id);
 };
 
 

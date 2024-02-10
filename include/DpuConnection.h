@@ -24,7 +24,7 @@ struct DpuRequest {
 
 struct DpuResponse {
   uint16_t coro_id;
-  char buffer[36];
+  char buffer[kInternalPageSize];
 } __attribute__((packed));
 
 class DpuConnection {
@@ -33,7 +33,7 @@ public:
   DpuConnection(RdmaContext &ctx, ibv_cq *cq, uint32_t messageNR, uint64_t sendSize, 
                   uint64_t recvSize, uint64_t wr_id = 0);
   void sendDpuRequest(DpuRequest *m);
-  void sendDpuResponse(DpuResponse *m);
+  void sendDpuResponse(DpuResponse *m, int32_t imm = -1);
   void initQPtoRTS(uint32_t remoteQPN, uint16_t remoteLid, uint8_t *gid);
 
   void initRecv();

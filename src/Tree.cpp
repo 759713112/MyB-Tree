@@ -19,6 +19,7 @@ uint64_t cache_miss[MAX_APP_THREAD][8];
 uint64_t cache_hit[MAX_APP_THREAD][8];
 uint64_t latency[MAX_APP_THREAD][LATENCY_WINDOWS];
 
+
 thread_local CoroCall Tree::worker[define::kMaxCoro];
 thread_local CoroCall Tree::master;
 thread_local GlobalAddress path_stack[define::kMaxCoro]
@@ -416,7 +417,7 @@ bool Tree::search(const Key &k, Value &v, CoroContext *cxt, int coro_id) {
   SearchResult result;
 
   GlobalAddress p = root;
-
+  assert(false);
   bool from_cache = false;
   const CacheEntry *entry = nullptr;
   if (enable_cache) {
@@ -427,7 +428,6 @@ bool Tree::search(const Key &k, Value &v, CoroContext *cxt, int coro_id) {
       cache_hit[dsm->getMyThreadID()][0]++;
       from_cache = true;
       p = cache_addr;
-
     } else {
       cache_miss[dsm->getMyThreadID()][0]++;
     }
@@ -464,6 +464,74 @@ next:
     goto next;
   }
 }
+
+
+bool Tree::searchWithDpu(const Key &k, Value &v, CoroContext *cxt, int coro_id) {
+  assert(dsm->is_register());
+
+  auto root = get_root_ptr(cxt, coro_id);
+  SearchResult result;
+
+  GlobalAddress p = root;
+
+  bool from_cache = false;
+  const CacheEntry *entry = nullptr;
+  if (enable_cache) {
+    GlobalAddress cache_addr;
+    // entry = index_cache->search_from_cache(k, &cache_addr,
+    //                                        dsm->getMyThreadID() == 0);
+    if (entry) { // cache hit
+      cache_hit[dsm->getMyThreadID()][0]++;
+      from_cache = true;
+      p = cache_addr;
+      assert(false);
+
+    } else {
+      auto page = (InternalPage*)dsm->rpcCallDpu(k, coro_id, cxt);
+      internal_page_search(page, k, result);
+      //index_cache->add_to_cache(page);
+      
+      p = result.next_level;
+
+      cache_miss[dsm->getMyThreadID()][0]++;
+    }
+  }
+next:
+  if (!page_search(p, k, result, cxt, coro_id, from_cache)) {
+    if (from_cache) { // cache stale
+      index_cache->invalidate(entry);
+      cache_hit[dsm->getMyThreadID()][0]--;
+      cache_miss[dsm->getMyThreadID()][0]++;
+      from_cache = false;
+
+      auto page = (InternalPage*)dsm->rpcCallDpu(k, coro_id, cxt);
+      internal_page_search(page, k, result);
+      index_cache->add_to_cache(page);
+      p = result.next_level;
+
+    } else {
+      std::cout << "SEARCH WARNING search" << std::endl;
+      sleep(1);
+    }
+    goto next;
+  }
+  if (result.is_leaf) {
+    if (result.val != kValueNull) { // find
+      v = result.val;
+      return true;
+    }
+    if (result.slibing != GlobalAddress::Null()) { // turn right
+      p = result.slibing;
+      goto next;
+    }
+    return false; // not found
+  } else {        // internal
+    p = result.slibing != GlobalAddress::Null() ? result.slibing
+                                                : result.next_level;
+    goto next;
+  }
+}
+
 
 uint64_t Tree::range_query(const Key &from, const Key &to, Value *value_buffer,
                            CoroContext *cxt, int coro_id) {
@@ -1094,7 +1162,7 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     coro_timer.begin();
     if (r.is_search) {
       Value v;
-      this->search(r.k, v, &ctx, coro_id);
+      this->searchWithDpu(r.k, v, &ctx, coro_id);
     } else {
       this->insert(r.k, r.v, &ctx, coro_id);
     }
