@@ -19,7 +19,7 @@ int kReadRatio;
 int kThreadCount;
 int kMemoryNodeCount;
 int kNodeCount;
-uint64_t kKeySpace = 64 * define::MB;
+uint64_t kKeySpace = 256 * define::MB;
 double kWarmRatio = 0.8;
 double zipfan = 0;
 
@@ -117,7 +117,7 @@ void thread_run(int id) {
   }
 
   uint64_t end_warm_key = kWarmRatio * kKeySpace;
-  for (uint64_t i = 1; i < 20; ++i) {
+  for (uint64_t i = 1; i < end_warm_key; ++i) {
     if (i % all_thread == my_id) {
       tree->insert(to_key(i), i * 2);
     }
@@ -256,7 +256,7 @@ int main(int argc, char *argv[]) {
   tree = new Tree(dsm);
 
   if (dsm->getMyNodeID() == 0) {
-    for (uint64_t i = 1; i < 102400; ++i) {
+    for (uint64_t i = 1; i < 1024000; ++i) {
       tree->insert(to_key(i), i * 2);
     }
   }

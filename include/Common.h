@@ -121,7 +121,7 @@ constexpr int64_t kPerCoroRdmaBuf = 128 * 1024;
 
 constexpr uint8_t kMaxHandOverTime = 8;
 
-constexpr int kIndexCacheSize = 1000; // MB
+constexpr int kIndexCacheSize = 10; // MB
 } // namespace define
 
 //高精度时间戳

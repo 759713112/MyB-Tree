@@ -135,7 +135,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
                                                        GlobalAddress *addr,
                                                        bool is_leader) {
   // notice: please ensure the thread 0 can make progress
-  if (is_leader &&
+  while (is_leader &&
       !delay_free_list.empty()) { // try to free a page in the delay-free-list
     auto p = delay_free_list.front();
     if (asm_rdtsc() - p.second > 3000ull * 10) {
@@ -145,6 +145,8 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
       free_lock.wLock();
       delay_free_list.pop();
       free_lock.wUnlock();
+    } else {
+      break;
     }
   }
 

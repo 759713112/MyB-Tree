@@ -417,7 +417,6 @@ bool Tree::search(const Key &k, Value &v, CoroContext *cxt, int coro_id) {
   SearchResult result;
 
   GlobalAddress p = root;
-  assert(false);
   bool from_cache = false;
   const CacheEntry *entry = nullptr;
   if (enable_cache) {
@@ -478,18 +477,17 @@ bool Tree::searchWithDpu(const Key &k, Value &v, CoroContext *cxt, int coro_id) 
   const CacheEntry *entry = nullptr;
   if (enable_cache) {
     GlobalAddress cache_addr;
-    // entry = index_cache->search_from_cache(k, &cache_addr,
-    //                                        dsm->getMyThreadID() == 0);
+    entry = index_cache->search_from_cache(k, &cache_addr,
+                                           dsm->getMyThreadID() == 0);
     if (entry) { // cache hit
       cache_hit[dsm->getMyThreadID()][0]++;
       from_cache = true;
       p = cache_addr;
-      assert(false);
 
     } else {
       auto page = (InternalPage*)dsm->rpcCallDpu(k, coro_id, cxt);
       internal_page_search(page, k, result);
-      //index_cache->add_to_cache(page);
+      index_cache->add_to_cache(page);
       
       p = result.next_level;
 
@@ -1162,7 +1160,8 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     coro_timer.begin();
     if (r.is_search) {
       Value v;
-      this->searchWithDpu(r.k, v, &ctx, coro_id);
+      this->search(r.k, v, &ctx, coro_id);
+      //this->searchWithDpu(r.k, v, &ctx, coro_id);
     } else {
       this->insert(r.k, r.v, &ctx, coro_id);
     }

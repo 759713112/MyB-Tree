@@ -160,6 +160,11 @@ private:
     uint32_t crc;
     uint64_t embedding_lock;
   };
+  //uint8_t front_version;
+  //Header hdr;
+  //Key key_list[kLeafCardinality];
+  //uint8_t rear_version;
+
   uint8_t front_version;
   Header hdr;
   LeafEntry records[kLeafCardinality];
