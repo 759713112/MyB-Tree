@@ -10,6 +10,7 @@
 #include <atomic>
 #include <queue>
 #include <vector>
+#include <google/tcmalloc.h>
 
 extern bool enter_debug;
 
@@ -135,10 +136,11 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
                                                        GlobalAddress *addr,
                                                        bool is_leader) {
   // notice: please ensure the thread 0 can make progress
+  
   while (is_leader &&
       !delay_free_list.empty()) { // try to free a page in the delay-free-list
     auto p = delay_free_list.front();
-    if (asm_rdtsc() - p.second > 3000ull * 10) {
+    if (asm_rdtsc() - p.second > 300ull * 10) {
       free(p.first);
       free_page_cnt.fetch_add(1);
 
@@ -146,6 +148,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
       delay_free_list.pop();
       free_lock.wUnlock();
     } else {
+      // Debug::notifyInfo("delay_free_list_size %d", delay_free_list.size());
       break;
     }
   }
@@ -221,6 +224,11 @@ inline bool IndexCache::invalidate(const CacheEntry *entry) {
     delay_free_list.push(std::make_pair(ptr, asm_rdtsc()));
     free_lock.wUnlock();
     return true;
+  } 
+  else {
+    // assert(entry->ptr == nullptr);
+    // Debug::notifyInfo("invalidate eroor");
+    // exit(-1);
   }
 
   return false;
@@ -248,15 +256,20 @@ retry:
 }
 
 inline void IndexCache::evict_one() {
-
+next:
   uint64_t freq1, freq2;
   auto e1 = get_a_random_entry(freq1);
   auto e2 = get_a_random_entry(freq2);
 
   if (freq1 < freq2) {
-    invalidate(e1);
+    if(!invalidate(e1)) {
+      goto next;
+    }
   } else {
-    invalidate(e2);
+    if (!invalidate(e2)) {
+      goto next;
+    }
+
   }
 }
 

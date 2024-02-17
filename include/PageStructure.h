@@ -163,6 +163,7 @@ private:
   //uint8_t front_version;
   //Header hdr;
   //Key key_list[kLeafCardinality];
+  //int16_t last_index;
   //uint8_t rear_version;
 
   uint8_t front_version;

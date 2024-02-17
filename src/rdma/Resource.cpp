@@ -172,7 +172,6 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, uint64_t mmSize,
 
   dm->memcpy_to_dm(dm, 0, (void *)buffer, mmSize);
   
-
   free(buffer);
 
   return mr;
