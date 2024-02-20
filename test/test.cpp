@@ -4,6 +4,10 @@
 #include "DpuCache.h"
 #include "DpuProcessor.h"
 #include "Timer.h"
+<<<<<<< HEAD
+=======
+#include <google/tcmalloc.h>
+>>>>>>> 5fffdbf952ee24999fcded466bf36aebd3cbe40b
 #include <thread>
 
 void func() {
@@ -18,6 +22,7 @@ void func() {
     std::cout << t.end() << std::endl;
     sleep(3);
 }
+<<<<<<< HEAD
 #include "PageStructure.h"
 int main() {
     // std::cout << sizeof(DpuCacheEntry) << std::endl;
@@ -40,5 +45,14 @@ int main() {
         x++;
     }
     std::cout << left << " " << right << " " <<x << std::endl; 
+=======
+int main() {
+    // std::cout << sizeof(DpuCacheEntry) << std::endl;
+    // std::cout << sizeof(InternalPage) << std::endl;
+    for (int i = 0; i < 10; i++) {
+        auto t = new std::thread(func);
+    }
+    sleep(20);
+>>>>>>> 5fffdbf952ee24999fcded466bf36aebd3cbe40b
     return 0;
 }

@@ -77,3 +77,5 @@ echo 0 > /proc/sys/kernel/core_uses_pid
 sysctl -w kernel.core_pattern=core
 
 doca_ctx_workq_add
+
+LD_PRELOAD="/usr/lib/libtcmalloc.so"

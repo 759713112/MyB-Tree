@@ -10,6 +10,7 @@
 #include <atomic>
 #include <queue>
 #include <vector>
+#include <google/tcmalloc.h>
 
 extern bool enter_debug;
 
@@ -145,7 +146,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
   while (is_leader &&
       !delay_free_list.empty()) { // try to free a page in the delay-free-list
     auto p = delay_free_list.front();
-    if (asm_rdtsc() - p.second > 3000ull * 10) {
+    if (asm_rdtsc() - p.second > 300ull * 10) {
       free(p.first);
       free_page_cnt.fetch_add(1);
 
@@ -153,7 +154,11 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
       delay_free_list.pop();
       free_lock.wUnlock();
     } else {
+<<<<<<< HEAD
       //Debug::notifyInfo("delay_free_list_size %d", delay_free_list.size());
+=======
+      // Debug::notifyInfo("delay_free_list_size %d", delay_free_list.size());
+>>>>>>> 5fffdbf952ee24999fcded466bf36aebd3cbe40b
       break;
     }
   }
