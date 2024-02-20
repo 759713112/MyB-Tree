@@ -13,7 +13,7 @@
 //////////////////// workload parameters /////////////////////
 
 // #define USE_CORO
-const int kCoroCnt = 8;
+const int kCoroCnt = 12;
 
 int kReadRatio;
 int kThreadCount;
@@ -86,7 +86,7 @@ std::atomic_bool ready{false};
 
 void thread_run(int id) {
 
-  bindCore(id);
+  bindCore((kThreadCount * dsm->getMyNodeID() + id) % 64);
 
   dsm->registerThread();
 
@@ -309,10 +309,10 @@ int main(int argc, char *argv[]) {
     uint64_t cluster_tp = dsm->sum((uint64_t)(per_node_tp * 1000));
 
     printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
-
+    printf("cache hit rate: %lf\n", hit * 1.0 / all);
     if (dsm->getMyNodeID() == 0) {
       printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
-      printf("cache hit rate: %lf\n", hit * 1.0 / all);
+      
     }
   }
 

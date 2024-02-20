@@ -116,12 +116,12 @@ constexpr uint64_t kNumOfLock = kLockChipMemSize / sizeof(uint64_t);
 // level of tree
 constexpr uint64_t kMaxLevelOfTree = 7;
 
-constexpr uint16_t kMaxCoro = 8;
+constexpr uint16_t kMaxCoro = 12;
 constexpr int64_t kPerCoroRdmaBuf = 128 * 1024;
 
 constexpr uint8_t kMaxHandOverTime = 8;
 
-constexpr int kIndexCacheSize = 10; // MB
+constexpr int kIndexCacheSize = 50; // MB
 } // namespace define
 
 //高精度时间戳
@@ -179,7 +179,7 @@ inline void compiler_barrier() { asm volatile("" ::: "memory"); }
 #define DMA_PCIE_ADDR "b5:00.0"
 #define DMA_PCIE_ADDR_ON_DPU "03:00.0"
 #define DMA_PCIE_ADDR_ON_HOST "b5:00.0"
-#define MAX_DOCA_BUFS 256
+#define MAX_DOCA_BUFS 512
 
 #define DPU_CACHE_INTERNAL_PAGE_NUM 1048576 //2 ^20 
 #endif /* __COMMON_H__ */

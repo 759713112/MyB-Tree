@@ -28,8 +28,8 @@ void* DpuCacheMultiCon::get(uint64_t addr, CoroContext *ctx) {
 next:
     uint64_t index = ((addr >> page_size_pow) & group_map_mask) << 2;
     void* local_addr = (this->buffer + ((index) << page_size_pow));
-    fetchFunc(local_addr, addr, fixed_page_size, ctx);
-    return local_addr;
+    // fetchFunc(local_addr, addr, fixed_page_size, ctx);
+    // return local_addr;
     uint32_t target_tag = (addr >> 16);
     DpuCacheEntry *blockAddr = this->entryArray + index;
     for(uint8_t i = 0; i < WAY_NUM; i++) {

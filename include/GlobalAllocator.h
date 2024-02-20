@@ -18,6 +18,7 @@ public:
   GlobalAllocator(const GlobalAddress &start, size_t size)
       : start(start), size(size) {
     bitmap_len = size / define::kChunkSize;
+    Debug::notifyInfo("bitmap_len %d", bitmap_len);
     bitmap = new bool[bitmap_len];
     memset(bitmap, 0, bitmap_len);
      
@@ -39,7 +40,7 @@ public:
     if (bitmap[bitmap_tail] == false) {
       bitmap[bitmap_tail] = true;
       res.offset += bitmap_tail * define::kChunkSize;
-
+      Debug::notifyInfo("bitmap_tail %d", bitmap_tail);
       bitmap_tail++;
     } else {
       assert(false);

@@ -72,7 +72,7 @@ constexpr int kLeafCardinality =
     sizeof(LeafEntry);
 
 class InternalPage {
-private:
+public:
   union {
     uint32_t crc;
     uint64_t embedding_lock;
@@ -163,6 +163,7 @@ private:
   //uint8_t front_version;
   //Header hdr;
   //Key key_list[kLeafCardinality];
+  //int16_t last_index;
   //uint8_t rear_version;
 
   uint8_t front_version;

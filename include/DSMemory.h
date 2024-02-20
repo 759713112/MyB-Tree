@@ -60,7 +60,7 @@ private:
 
   DSMConfig conf;
   std::atomic_int appID;
-  Cache cache;
+
 
   static thread_local int thread_id;
   static thread_local char *rdma_buffer;

@@ -19,7 +19,7 @@ public:
   bool isMemoryNode;
 
   DSMConfig(const CacheConfig &cacheConfig = CacheConfig(),
-            uint32_t machineNR = 2, uint32_t memoryNR = 2, uint64_t dsmSize = 16, bool isMemoryNode = false)
+            uint32_t machineNR = 2, uint32_t memoryNR = 2, uint64_t dsmSize = 32, bool isMemoryNode = false)
       : cacheConfig(cacheConfig), machineNR(machineNR), memoryNR(memoryNR), dsmSize(dsmSize), isMemoryNode(isMemoryNode) {}
 };
 

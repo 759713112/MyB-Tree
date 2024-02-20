@@ -231,6 +231,7 @@ inline bool Tree::try_lock_addr(GlobalAddress lock_addr, uint64_t tag,
       std::cout << dsm->getMyNodeID() << ", " << dsm->getMyThreadID()
                 << " locked by " << (conflict_tag >> 32) << ", "
                 << (conflict_tag << 32 >> 32) << std::endl;
+      sleep(3);
       assert(false);
     }
 
@@ -478,7 +479,7 @@ bool Tree::searchWithDpu(const Key &k, Value &v, CoroContext *cxt, int coro_id) 
   if (enable_cache) {
     GlobalAddress cache_addr;
     entry = index_cache->search_from_cache(k, &cache_addr,
-                                           dsm->getMyThreadID() == 0);
+                                           dsm->getMyThreadID() == 0);                                           
     if (entry) { // cache hit
       cache_hit[dsm->getMyThreadID()][0]++;
       from_cache = true;
@@ -487,8 +488,9 @@ bool Tree::searchWithDpu(const Key &k, Value &v, CoroContext *cxt, int coro_id) 
     } else {
       auto page = (InternalPage*)dsm->rpcCallDpu(k, coro_id, cxt);
       internal_page_search(page, k, result);
-      index_cache->add_to_cache(page);
-      
+      if (page->hdr.level == 1) {
+        index_cache->add_to_cache(page);
+      }
       p = result.next_level;
 
       cache_miss[dsm->getMyThreadID()][0]++;
@@ -504,9 +506,10 @@ next:
 
       auto page = (InternalPage*)dsm->rpcCallDpu(k, coro_id, cxt);
       internal_page_search(page, k, result);
-      index_cache->add_to_cache(page);
+      if (page->hdr.level == 1) {
+        index_cache->add_to_cache(page);
+      }
       p = result.next_level;
-
     } else {
       std::cout << "SEARCH WARNING search" << std::endl;
       sleep(1);
@@ -747,14 +750,33 @@ void Tree::internal_page_search(InternalPage *page, const Key &k,
     result.next_level = page->hdr.leftmost_ptr;
     return;
   }
-
-  for (int i = 1; i < cnt; ++i) {
-    if (k < page->records[i].key) {
-      result.next_level = page->records[i - 1].ptr;
-      return;
+  if (cnt < 10) {
+    for (int i = 1; i < cnt; ++i) {
+      if (k < page->records[i].key) {
+        result.next_level = page->records[i - 1].ptr;
+        return;
+      }
     }
+    result.next_level = page->records[cnt - 1].ptr;
+  } else {
+    int left = 1, right = cnt;
+    while (left < right) {
+      int mid = (left + right) / 2;
+      if (k < page->records[mid].key) {
+          right = mid;
+      } else {
+          left = mid + 1;
+      }
+    }
+    result.next_level = page->records[right - 1].ptr;
   }
-  result.next_level = page->records[cnt - 1].ptr;
+  // for (int i = 1; i < cnt; ++i) {
+  //   if (k < page->records[i].key) {
+  //     result.next_level = page->records[i - 1].ptr;
+  //     return;
+  //   }
+  // }
+  // result.next_level = page->records[cnt - 1].ptr;
 }
 
 void Tree::leaf_page_search(LeafPage *page, const Key &k,

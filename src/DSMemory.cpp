@@ -17,7 +17,7 @@ DSMemory *DSMemory::getInstance(const DSMConfig &conf) {
 }
 
 DSMemory::DSMemory(const DSMConfig &conf)
-    : conf(conf), appID(0), cache(conf.cacheConfig) {
+    : conf(conf), appID(0) {
 
 
   remoteInfo = new RemoteConnection[conf.machineNR];
@@ -25,13 +25,12 @@ DSMemory::DSMemory(const DSMConfig &conf)
 
   baseAddr = (uint64_t)hugePageAlloc(conf.dsmSize * define::GB);
   Debug::notifyInfo("shared memory size: %dGB, 0x%lx", conf.dsmSize, baseAddr);
-  Debug::notifyInfo("cache size: %dGB", conf.cacheConfig.cacheSize);
 
   // warmup
   // memset((char *)baseAddr, 0, conf.dsmSize * define::GB);
   for (uint64_t i = baseAddr; i < baseAddr + conf.dsmSize * define::GB;
-      i += 2 * define::MB) {
-    *(char *)i = 0;
+      i += 1 * define::MB) {
+    memset((char *)i, 0, define::MB);
   }
 
   for (int i = 0; i < NR_DIRECTORY; ++i) {
@@ -41,8 +40,8 @@ DSMemory::DSMemory(const DSMConfig &conf)
   }
   // clear up first chunk
   memset((char *)baseAddr, 0, define::kChunkSize);
-  memcpy((char *)baseAddr, "just\0aaaaaa", 10);
-  memcpy((char *)(baseAddr+1024), "22just\0aaaaaa", 10);
+  // memcpy((char *)baseAddr, "just\0aaaaaa", 10);
+  // memcpy((char *)(baseAddr+1024), "22just\0aaaaaa", 10);
   init_dma_host_args();
 
   

@@ -64,7 +64,7 @@ void Directory::process_message(const RawMessage *m) {
   case RpcType::MALLOC: {
 
     send = (RawMessage *)dCon->message->getSendPool();
-
+    Debug::notifyInfo("Receive %d alloc", send->app_id);
     send->addr = chunckAlloc->alloc_chunck();
     break;
   }

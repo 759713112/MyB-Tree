@@ -190,10 +190,11 @@ doca_error_t DmaConnectCtx::createWorkQueue(uint32_t workq_depth, struct doca_wo
 	}
 	return res;
 }
+
 doca_error_t DmaConnectCtx::getDstDocaBuf(doca_buf **dst_doca_buf) {
 
 	/* Construct DOCA buffer for each address range */
-	auto result = doca_buf_inventory_buf_by_addr(state.buf_inv, state.dst_mmap, local_buffer, 4096,
+	auto result = doca_buf_inventory_buf_by_addr(state.buf_inv, state.dst_mmap, local_buffer, 1024,
 						dst_doca_buf);
 	if (result != DOCA_SUCCESS) {
 		Debug::notifyError("Unable to acquire DOCA buffer representing destination buffer: %s",

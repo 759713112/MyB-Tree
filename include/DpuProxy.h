@@ -42,8 +42,8 @@ public:
   bool poll_dma_cq_once(uint64_t &next_coro_id);
 
   int pollRpcDpu(std::queue<DpuRequest*> &task_queue, int poll_number) {
-    static thread_local ibv_wc wc[8];
-    poll_number = poll_number > 8 ? 8 : poll_number;
+    static thread_local ibv_wc wc[12];
+    poll_number = poll_number > 12 ? 12 : poll_number;
     int success_count = pollOnce(completeQueue, poll_number, wc);
     if (success_count <= 0) return 0;
     else {
@@ -66,7 +66,7 @@ public:
   }
 
 private:
-  DpuProxy(const DSMConfig &conf);
+  DpuProxy(const DSMConfig &conf); 
   ~DpuProxy();
   void init_dma_state();
   void catch_root_change();

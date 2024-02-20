@@ -6,7 +6,7 @@ add_definitions(-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
 
 #Compiler options
 set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -O3 -g")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11") 
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++17") 
 # Link Options
 set(LINKS_FLAGS "-lcityhash -lboost_system -lboost_coroutine -lboost_context  -lpthread -libverbs -lmemcached -lmlx5")
 
@@ -18,10 +18,8 @@ file(GLOB_RECURSE COMMON_FILE ${COMMON_SRC}/*.c*)
 set(INCLUDE_BASE ${PROJECT_SOURCE_DIR}/include)
 include_directories(${INCLUDE_BASE} ${DOCA_INCLUDE_DIRS})
 add_compile_definitions(USE_CORO)
+
 if (DOCA_FOUND)
-
-
-
     if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "aarch64")
         message("Code for aarch64 architecture.")
         add_compile_definitions(AARCH64)

@@ -38,7 +38,7 @@ DpuProxy::DpuProxy(const DSMConfig &conf) : DSM(conf) {
 	init_dma_state();
 	
 	myNodeID = keeper->getMyNodeID();
-	auto t =  new std::thread(&DSM::catch_root_change);
+	auto t =  new std::thread(std::bind(&DpuProxy::catch_root_change, this));
 	// keeper->barrier("DpuProxy-init");
 }
 
@@ -106,16 +106,15 @@ void* DpuProxy::readByDmaFixedSize(GlobalAddress gaddr, CoroContext *ctx) {
 }
 
 void* DpuProxy::readWithoutCache(GlobalAddress gaddr, CoroContext *ctx) {
-	static thread_local int bias = 0;
+
 	auto buffer = local_buffer + (this->getMyThreadID() * 16 + ctx->coro_id) * 1024;
 	dmaCon.readByDma(buffer, gaddr.offset, 1024, ctx);
-	
-	bias = (bias + 1) % 1024;
+
 	return buffer;
 }
 
 void DpuProxy::init_dma_state() {
-	size_t local_buffer_size = DPU_CACHE_INTERNAL_PAGE_NUM * sizeof(InternalPage);
+	size_t local_buffer_size = (DPU_CACHE_INTERNAL_PAGE_NUM + MAX_DPU_THREAD * 16) * sizeof(InternalPage);
 	local_buffer = hugePageAlloc(local_buffer_size);
 #ifndef AARCH64
 	auto result = dmaConCtx.connect(this->keeper->get_dma_export_desc(), this->keeper->get_dma_export_desc_len(), 
@@ -136,7 +135,7 @@ void DpuProxy::init_dma_state() {
 	this->dpuCache = new DpuCacheMultiCon(
 		[](void *buffer, uint64_t addr, size_t size, CoroContext *ctx) {
 			dmaCon.readByDma(buffer, addr, size, ctx);
-		}, local_buffer, local_buffer_size, kInternalPageSize);
+		}, local_buffer + (MAX_DPU_THREAD * 16) * sizeof(InternalPage), DPU_CACHE_INTERNAL_PAGE_NUM * sizeof(InternalPage), kInternalPageSize);
 }
 
 
@@ -151,7 +150,7 @@ extern GlobalAddress g_root_ptr;
 extern int g_root_level;
 extern bool enable_cache;
 
-InternalPage* root_node;
+std::atomic<InternalPage*> root_node;
 void DpuProxy::catch_root_change() {
   std::cout << "start catch broadcast" << std::endl;
   int udpSocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -212,10 +211,14 @@ void DpuProxy::catch_root_change() {
             enable_cache = true;
           }
 		//   dmaCon
-		void* new_buffer = local_buffer + (flag * sizeof(InternalPage));
-		dmaCon.readByDma(new_buffer, g_root_ptr.offset, 1024);
-		root_node = (InternalPage*)new_buffer;
-		root_node->check_consistent();
+		InternalPage* new_buffer = (InternalPage*)(local_buffer + (flag * sizeof(InternalPage)));
+		dmaCon.readByDma((void*) new_buffer, g_root_ptr.offset, 1024);
+		if(!new_buffer->check_consistent()) {
+			std::cout << "Read root error" << g_root_ptr << std::endl;
+			exit(-1);
+		}
+		root_node.store(new_buffer);
+		
 		flag ^= 1;	
         std::cout << "Received change root to" << g_root_ptr << std::endl;
       }

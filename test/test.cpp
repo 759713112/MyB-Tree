@@ -3,11 +3,42 @@
 #include <iostream>
 #include "DpuCache.h"
 #include "DpuProcessor.h"
+#include "Timer.h"
+#include <thread>
 
-
+void func() {
+    Timer t;
+    t.begin();
+    for (int i = 0; i < 1000000; i++) {
+        char* a = (char*)malloc(1024);
+        a[512] = 'a'; 
+        a[128] = ';';
+    } 
+    t.end();
+    std::cout << t.end() << std::endl;
+    sleep(3);
+}
+#include "PageStructure.h"
 int main() {
-    std::cout << sizeof(DpuCacheEntry) << std::endl;
-    std::cout << sizeof(InternalPage) << std::endl;
-
+    // std::cout << sizeof(DpuCacheEntry) << std::endl;
+    InternalPage* page = new InternalPage;
+    int cnt = 40;
+    for (int i = 0; i < cnt; i++) {
+        page->records[i].key = i * 5;
+    }
+    // 0 5 10 15 20 25 30 35 40 45 50 60 65 
+    Key k = 27;
+    int left = 1, right = cnt;
+    int x = 0;
+    while (left < right) {
+        int mid = (left + right) / 2;
+        if (k < page->records[mid].key) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+        x++;
+    }
+    std::cout << left << " " << right << " " <<x << std::endl; 
     return 0;
 }

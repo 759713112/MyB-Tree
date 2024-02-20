@@ -54,19 +54,33 @@ void DpuProcessor::coro_worker(CoroYield &yield, int coro_id) {
         Debug::debugCur("Get request, key: %d, node_id: %d, thread_id: %d, mythread_id: %d", req->k, req->node_id, req->app_id, thread_id);
 
         auto curPageGlobalAddr = get_root_ptr(&ctx, coro_id);
+        
         DpuSearchResult result;
+        auto root_node = get_root_node();
+        internal_page_search(root_node, req->k, result);
+        curPageGlobalAddr = result.next_level;
+        result.cur_page = root_node;
+        
         while (true) {
           page_search(curPageGlobalAddr, req->k, result, &ctx, coro_id);
           if (result.slibing == GlobalAddress::Null()) {
-            if (result.level == 1) {
-              break;
-            }
             curPageGlobalAddr = result.next_level;
           } else {
             curPageGlobalAddr = result.slibing;
           }
+          
+          if (result.level <= 3) break;
         }
+        int retry_cnt = 0;
         
+        do {
+          if (++retry_cnt > 100) {
+            Debug::notifyError("Dma Read Page the exceed the limit!");
+            exit(-1);
+          }
+          result.cur_page = (InternalPage*)dpuProxy->readWithoutCache(curPageGlobalAddr, &ctx);
+        } while(!result.cur_page->check_consistent());
+
         // static char* buffer = new char[1024];
         // dpuProxy->rpc_rsp_dpu(buffer, *req);
         dpuProxy->rpc_rsp_dpu(result.cur_page, *req);
@@ -193,10 +207,10 @@ GlobalAddress DpuProcessor::get_root_ptr(CoroContext *cxt, int coro_id) {
   }
 }
 
-extern InternalPage* root_node;
+extern std::atomic<InternalPage*> root_node;
 InternalPage* DpuProcessor::get_root_node() {
   assert(root_node != nullptr);
-  return root_node;
+  return root_node.load();
 }
 
 thread_local GlobalAddress path_stack[define::kMaxCoro]
@@ -212,7 +226,7 @@ re_read:
     printf("re read too many times\n");
     sleep(1);
   }
-  auto page = (InternalPage*)dpuProxy->readWithoutCache(page_addr, ctx);
+  auto page = (InternalPage*)dpuProxy->readByDmaFixedSize(page_addr, ctx);
   auto header = (Header *)((void*)page + (STRUCT_OFFSET(LeafPage, hdr)));
   memset(&result, 0, sizeof(result));
   result.level = header->level;
@@ -249,12 +263,25 @@ void DpuProcessor::internal_page_search(InternalPage *page, const Key &k,
     result.next_level = page->hdr.leftmost_ptr;
     return;
   }
-
-  for (int i = 1; i < cnt; ++i) {
-    if (k < page->records[i].key) {
-      result.next_level = page->records[i - 1].ptr;
-      return;
+  if (cnt < 10) {
+    for (int i = 1; i < cnt; ++i) {
+      if (k < page->records[i].key) {
+        result.next_level = page->records[i - 1].ptr;
+        return;
+      }
     }
+    result.next_level = page->records[cnt - 1].ptr;
+  } else {
+    int left = 1, right = cnt;
+    while (left < right) {
+      int mid = (left + right) / 2;
+      if (k < page->records[mid].key) {
+          right = mid;
+      } else {
+          left = mid + 1;
+      }
+    }
+    result.next_level = page->records[right - 1].ptr;
   }
-  result.next_level = page->records[cnt - 1].ptr;
+
 }

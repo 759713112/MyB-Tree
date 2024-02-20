@@ -101,6 +101,12 @@ inline const CacheEntry *IndexCache::find_entry(const Key &k) {
 
 inline bool IndexCache::add_to_cache(InternalPage *page) {
   auto new_page = (InternalPage *)malloc(kInternalPageSize);
+  if (new_page == nullptr) {
+    Debug::notifyError("alloc memory error!!!");
+    while(new_page == nullptr) {
+      new_page = (InternalPage *)malloc(kInternalPageSize);
+    }
+  }
   memcpy(new_page, page, kInternalPageSize);
   new_page->index_cache_freq = 0;
 
@@ -135,6 +141,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
                                                        GlobalAddress *addr,
                                                        bool is_leader) {
   // notice: please ensure the thread 0 can make progress
+  
   while (is_leader &&
       !delay_free_list.empty()) { // try to free a page in the delay-free-list
     auto p = delay_free_list.front();
@@ -146,10 +153,10 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
       delay_free_list.pop();
       free_lock.wUnlock();
     } else {
+      //Debug::notifyInfo("delay_free_list_size %d", delay_free_list.size());
       break;
     }
   }
-
   auto entry = find_entry(k);
 
   InternalPage *page = entry ? entry->ptr : nullptr;
@@ -221,6 +228,11 @@ inline bool IndexCache::invalidate(const CacheEntry *entry) {
     delay_free_list.push(std::make_pair(ptr, asm_rdtsc()));
     free_lock.wUnlock();
     return true;
+  } 
+  else {
+    // assert(entry->ptr == nullptr);
+    // Debug::notifyInfo("invalidate eroor");
+    // exit(-1);
   }
 
   return false;
@@ -248,15 +260,20 @@ retry:
 }
 
 inline void IndexCache::evict_one() {
-
+next:
   uint64_t freq1, freq2;
   auto e1 = get_a_random_entry(freq1);
   auto e2 = get_a_random_entry(freq2);
 
   if (freq1 < freq2) {
-    invalidate(e1);
+    if(!invalidate(e1)) {
+      goto next;
+    }
   } else {
-    invalidate(e2);
+    if (!invalidate(e2)) {
+      goto next;
+    }
+
   }
 }
 
