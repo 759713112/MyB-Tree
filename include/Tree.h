@@ -43,7 +43,7 @@ class LeafPage;
 class Tree {
 
 public:
-  Tree(DSM *dsm, uint16_t tree_id = 0);
+  Tree(DSM *dsm, uint16_t tree_id = 0, uint64_t index_cache_size = 50);
 
   void insert(const Key &k, const Value &v, CoroContext *cxt = nullptr,
               int coro_id = 0);

@@ -14,7 +14,7 @@
 #include <unistd.h>
 
 bool enter_debug = false;
-
+extern const Value kValueNull;
 uint64_t cache_miss[MAX_APP_THREAD][8];
 uint64_t cache_hit[MAX_APP_THREAD][8];
 uint64_t latency[MAX_APP_THREAD][LATENCY_WINDOWS];
@@ -28,7 +28,7 @@ thread_local GlobalAddress path_stack[define::kMaxCoro]
 thread_local Timer timer;
 thread_local std::queue<uint16_t> hot_wait_queue;
 
-Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id) {
+Tree::Tree(DSM *dsm, uint16_t tree_id, uint64_t index_cache_size) : dsm(dsm), tree_id(tree_id) {
 
   for (int i = 0; i < dsm->getClusterSize(); ++i) {
     local_locks[i] = new LocalLockNode[define::kNumOfLock];
@@ -43,7 +43,7 @@ Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id) {
   assert(dsm->is_register());
   print_verbose();
 
-  index_cache = new IndexCache(define::kIndexCacheSize);
+  index_cache = new IndexCache(index_cache_size);
 
   root_ptr_ptr = get_root_ptr_ptr();
 
@@ -750,33 +750,33 @@ void Tree::internal_page_search(InternalPage *page, const Key &k,
     result.next_level = page->hdr.leftmost_ptr;
     return;
   }
-  if (cnt < 10) {
-    for (int i = 1; i < cnt; ++i) {
-      if (k < page->records[i].key) {
-        result.next_level = page->records[i - 1].ptr;
-        return;
-      }
-    }
-    result.next_level = page->records[cnt - 1].ptr;
-  } else {
-    int left = 1, right = cnt;
-    while (left < right) {
-      int mid = (left + right) / 2;
-      if (k < page->records[mid].key) {
-          right = mid;
-      } else {
-          left = mid + 1;
-      }
-    }
-    result.next_level = page->records[right - 1].ptr;
-  }
-  // for (int i = 1; i < cnt; ++i) {
-  //   if (k < page->records[i].key) {
-  //     result.next_level = page->records[i - 1].ptr;
-  //     return;
+  // if (cnt < 10) {
+  //   for (int i = 1; i < cnt; ++i) {
+  //     if (k < page->records[i].key) {
+  //       result.next_level = page->records[i - 1].ptr;
+  //       return;
+  //     }
   //   }
+  //   result.next_level = page->records[cnt - 1].ptr;
+  // } else {
+  //   int left = 1, right = cnt;
+  //   while (left < right) {
+  //     int mid = (left + right) / 2;
+  //     if (k < page->records[mid].key) {
+  //         right = mid;
+  //     } else {
+  //         left = mid + 1;
+  //     }
+  //   }
+  //   result.next_level = page->records[right - 1].ptr;
   // }
-  // result.next_level = page->records[cnt - 1].ptr;
+  for (int i = 1; i < cnt; ++i) {
+    if (k < page->records[i].key) {
+      result.next_level = page->records[i - 1].ptr;
+      return;
+    }
+  }
+  result.next_level = page->records[cnt - 1].ptr;
 }
 
 void Tree::leaf_page_search(LeafPage *page, const Key &k,

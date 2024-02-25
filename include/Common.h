@@ -145,10 +145,30 @@ static inline unsigned long long asm_rdtsc(void) {
 
 // For Tree
 using Key = uint64_t;
-using Value = uint64_t;
+constexpr uint32_t ValueSize = 8;
+struct Value {
+  uint64_t val[ValueSize/8];
+  Value(uint64_t v) {
+    memset(val, v, ValueSize);
+  }
+  Value(const Value &v) {
+    memcpy(val, v.val, ValueSize);
+  };
+  Value() {};
+
+  bool operator==(const Value &v) {
+    return memcmp(val, v.val, ValueSize) == 0;
+  }
+  bool operator!=(const Value &v) {
+    return !(*this == v);
+  }
+}__attribute__((packed));
+
+const Value kValueNull = 0;
+// using Value = uint64_t;
 constexpr Key kKeyMin = std::numeric_limits<Key>::min();
 constexpr Key kKeyMax = std::numeric_limits<Key>::max();
-constexpr Value kValueNull = 0;
+
 
 // Note: our RNICs can read 1KB data in increasing address order (but not for 4KB)
 constexpr uint32_t kInternalPageSize = 1024;

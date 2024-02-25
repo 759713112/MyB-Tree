@@ -75,6 +75,7 @@ void DSMemoryKeeper::connect() {
       continue;
     }
     uint32_t computeNum = atoi(serverNumStr);
+    printf("computeNum%d \n", computeNum);
     free(serverNumStr);
 
     // /connect server K

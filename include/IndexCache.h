@@ -154,11 +154,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
       delay_free_list.pop();
       free_lock.wUnlock();
     } else {
-<<<<<<< HEAD
       //Debug::notifyInfo("delay_free_list_size %d", delay_free_list.size());
-=======
-      // Debug::notifyInfo("delay_free_list_size %d", delay_free_list.size());
->>>>>>> 5fffdbf952ee24999fcded466bf36aebd3cbe40b
       break;
     }
   }

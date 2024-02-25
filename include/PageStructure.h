@@ -3,6 +3,9 @@
 #include "Common.h"
 #include "GlobalAddress.h"
 #include <iostream>
+
+extern const Value kValueNull;
+
 class Header {
 private:
   GlobalAddress leftmost_ptr;
@@ -53,6 +56,7 @@ public:
   uint8_t f_version : 4;
   Key key;
   Value value;
+
   uint8_t r_version : 4;
 
   LeafEntry() {

@@ -30,19 +30,19 @@ void parse_args(int argc, char *argv[]) {
   kNodeCount = atoi(argv[1]);
   kComputeCount = atoi(argv[2]);
   printf("kNodeCount %d, kComputeCount %d\n", kNodeCount, kComputeCount);
+  fflush(stdout);
 }
 
 
 void signalHandler(int signal) {
     std::cout << "Ctrl+C signal received. Exiting." << std::endl;
-    // 这里可以执行一些清理工作
     std::exit(signal);
 }
 
 int main(int argc, char *argv[]) {
 
   parse_args(argc, argv);
-
+  
   DSMConfig config;
   config.machineNR = kComputeCount;
   // config.memoryNR = kComputeCount;

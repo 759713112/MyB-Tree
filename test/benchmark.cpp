@@ -13,14 +13,15 @@
 //////////////////// workload parameters /////////////////////
 
 // #define USE_CORO
-const int kCoroCnt = 12;
+const int kCoroCnt = 8;
 
 int kReadRatio;
 int kThreadCount;
-int kMemoryNodeCount;
+int kMemoryNodeCount = 1;
 int kNodeCount;
 uint64_t kKeySpace = 256 * define::MB;
-double kWarmRatio = 0.8;
+double kWarmRatio = 0.01;
+uint64_t index_cache_size = 50; //MB
 double zipfan = 0;
 
 //////////////////// workload parameters /////////////////////
@@ -99,26 +100,22 @@ void thread_run(int id) {
   uint64_t my_id = kThreadCount * dsm->getMyNodeID() + id;
 
   printf("I am thread %ld on compute nodes\n", my_id);
+  fflush(stdout);
   bench_timer.begin();
-  // for (int i = 0; i < 10; i++) {
-  //     dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
-  // }
-  // while (true) {
-  //   bench_timer.begin();
-  //   auto rsp = dsm->rpc_dpu_wait();
-  //   Debug::debugCur("Receive response: , receive latency %ld", bench_timer.end());
-  //   bench_timer.begin();
-  //   dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
-  //   // dsm->rpcCallDpu(dsm->getMyThreadID(), 0);
-  // }
   
   if (id == 0) {
     bench_timer.begin();
   }
 
   uint64_t end_warm_key = kWarmRatio * kKeySpace;
+  int j = 0;
   for (uint64_t i = 1; i < end_warm_key; ++i) {
     if (i % all_thread == my_id) {
+      // j++;
+      // if (j == 100000) {
+      //   std::cout << "inserting" << i << std::endl;
+      //   j = 0;
+      // }
       tree->insert(to_key(i), i * 2);
     }
   }
@@ -141,10 +138,9 @@ void thread_run(int id) {
 
     warmup_cnt.store(0);
   }
-
+  fflush(stdout);
   while (warmup_cnt.load() != 0)
     ;
-
 
 #ifdef USE_CORO
   tree->run_coroutine(coro_func, id, kCoroCnt);
@@ -185,18 +181,21 @@ void thread_run(int id) {
 }
 
 void parse_args(int argc, char *argv[]) {
-  if (argc != 5) {
-    printf("Usage: ./benchmark kNodeCount  kMemoryNodeCount kReadRatio kThreadCount\n");
+  if (argc < 4) {
+    printf("Usage: ./benchmark kNodeCount kReadRatio kThreadCount indexCacheSize\n");
     exit(-1);
   }
 
   kNodeCount = atoi(argv[1]);
-  kMemoryNodeCount = atoi(argv[2]);
-  kReadRatio = atoi(argv[3]);
-  kThreadCount = atoi(argv[4]);
+  kReadRatio = atoi(argv[2]);
+  kThreadCount = atoi(argv[3]);
 
-  printf("kNodeCount %d, kMemoryNodeCount %d, kReadRatio %d, kThreadCount %d\n", kNodeCount, kMemoryNodeCount,
-         kReadRatio, kThreadCount);
+  if(argc >= 5) {
+    index_cache_size = atoi(argv[4]);
+  }
+
+  printf("kNodeCount %d, kReadRatio %d, kThreadCount %d, indexCacheSize %dMB\n", kNodeCount, kReadRatio, kThreadCount, index_cache_size);
+  fflush(stdout);
 }
 
 void cal_latency() {
@@ -241,6 +240,7 @@ void cal_latency() {
       return;
     }
   }
+  fflush(stdout);
 }
 
 int main(int argc, char *argv[]) {
@@ -253,11 +253,12 @@ int main(int argc, char *argv[]) {
   dsm = DSM::getInstance(config);
 
   dsm->registerThread();
-  tree = new Tree(dsm);
-
+  tree = new Tree(dsm, 0, index_cache_size);
+  Timer t;
   if (dsm->getMyNodeID() == 0) {
     for (uint64_t i = 1; i < 1024000; ++i) {
       tree->insert(to_key(i), i * 2);
+      //std::cout << i << "  insert" << std::endl;
     }
   }
   std::cout << "okkkk" << std::endl;
@@ -287,7 +288,6 @@ int main(int argc, char *argv[]) {
     uint64_t all_tp = 0;
     for (int i = 0; i < kThreadCount; ++i) {
       all_tp += tp[i][0];
-      printf("thread %d tp %lld\n", i, tp[i][0]);
     }
     uint64_t cap = all_tp - pre_tp;
     pre_tp = all_tp;
@@ -311,10 +311,11 @@ int main(int argc, char *argv[]) {
     printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
     printf("cache hit rate: %lf\n", hit * 1.0 / all);
     if (dsm->getMyNodeID() == 0) {
-      printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
+      printf("cluster throughput %.3f\n", cluster_tp / 1000.0 + per_node_tp);
       
     }
   }
+  fflush(stdout);
 
   return 0;
 }

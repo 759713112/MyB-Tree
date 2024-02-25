@@ -38,7 +38,7 @@ if (DOCA_FOUND)
 else()
     message("Just Compile client")
     file(GLOB_RECURSE REMOVE_SOURCE ${COMMON_SRC}/*.c ${COMMON_SRC}/DmaDpu.cpp 
-                ${COMMON_SRC}/DpuPro*.cpp  ${COMMON_SRC}/DSMemory*.cpp)
+        ${COMMON_SRC}/DpuPro*.cpp  ${COMMON_SRC}/DSMemory*.cpp  ${COMMON_SRC}/DpuCache*.cpp ${COMMON_SRC}/DpuPro*.cpp)
     list(REMOVE_ITEM COMMON_FILE ${REMOVE_SOURCE})
 
     add_library(sherman STATIC ${COMMON_FILE})
