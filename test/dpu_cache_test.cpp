@@ -130,7 +130,7 @@ void thread_run(int id) {
     if (us_10 >= LATENCY_WINDOWS) {
       us_10 = LATENCY_WINDOWS - 1;
     }
-    latency[id][us_10]++;
+    dpu_latency[id][us_10]++;
 
     tp[id][0]++;
   }

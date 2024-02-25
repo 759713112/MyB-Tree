@@ -213,8 +213,8 @@ InternalPage* DpuProcessor::get_root_node() {
   return root_node.load();
 }
 
-thread_local GlobalAddress path_stack[define::kMaxCoro]
-                                     [define::kMaxLevelOfTree];
+// thread_local GlobalAddress path_stack[define::kMaxCoro]
+//                                      [define::kMaxLevelOfTree];
 
 
 bool DpuProcessor::page_search(GlobalAddress page_addr, const Key &k,
@@ -231,7 +231,7 @@ re_read:
   memset(&result, 0, sizeof(result));
   result.level = header->level;
   result.cur_page = page;
-  path_stack[coro_id][result.level] = page_addr;
+  // path_stack[coro_id][result.level] = page_addr;
   
   assert(result.level >= 1);
   

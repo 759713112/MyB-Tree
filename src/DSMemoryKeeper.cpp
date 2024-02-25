@@ -19,7 +19,7 @@ DSMemoryKeeper::DSMemoryKeeper(DirectoryConnection **dirCon, RemoteConnection *r
     }
     enter();
     connect();
-    connectDpu();
+    // connectDpu();
 
     initRouteRule();
 }

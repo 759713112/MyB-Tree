@@ -100,12 +100,12 @@ bool DSMKeeper::connectNode(uint16_t remoteID) {
   free(remoteMeta);
 
   //connect dpu
-  setK = "compute-dpu:" + std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
-  memSet(setK.c_str(), setK.size(), (char *)(&localMeta), sizeof(localMeta));
+  // setK = "compute-dpu:" + std::to_string(getMyNodeID()) + "-" + std::to_string(remoteID);
+  // memSet(setK.c_str(), setK.size(), (char *)(&localMeta), sizeof(localMeta));
 
-  getK = "dpu-compute" + std::to_string(remoteID);
-  remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
-  setDataFromRemoteDpu(remoteID, remoteMeta);
+  // getK = "dpu-compute" + std::to_string(remoteID);
+  // remoteMeta = (ExchangeMeta *)memGet(getK.c_str(), getK.size());
+  // setDataFromRemoteDpu(remoteID, remoteMeta);
 
   return true;
 }

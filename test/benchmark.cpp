@@ -19,8 +19,8 @@ int kReadRatio;
 int kThreadCount;
 int kMemoryNodeCount = 1;
 int kNodeCount;
-uint64_t kKeySpace = 256 * define::MB;
-double kWarmRatio = 0.01;
+uint64_t kKeySpace = 1024 * define::MB;
+double kWarmRatio = 0.2;
 uint64_t index_cache_size = 50; //MB
 double zipfan = 0;
 
@@ -255,13 +255,14 @@ int main(int argc, char *argv[]) {
   dsm->registerThread();
   tree = new Tree(dsm, 0, index_cache_size);
   Timer t;
+  t.begin(); 
   if (dsm->getMyNodeID() == 0) {
     for (uint64_t i = 1; i < 1024000; ++i) {
       tree->insert(to_key(i), i * 2);
       //std::cout << i << "  insert" << std::endl;
     }
   }
-  std::cout << "okkkk" << std::endl;
+  std::cout << "insert 1024000 key okkkk" << t.end() << std::endl;
   dsm->barrier("benchmark");
   dsm->resetThread();
 
@@ -278,8 +279,9 @@ int main(int argc, char *argv[]) {
   int count = 0;
 
   clock_gettime(CLOCK_REALTIME, &s);
+  int number = 0;
   while (true) {
-
+    number++;
     sleep(2);
     clock_gettime(CLOCK_REALTIME, &e);
     int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
@@ -307,7 +309,7 @@ int main(int argc, char *argv[]) {
 
     double per_node_tp = cap * 1.0 / microseconds;
     uint64_t cluster_tp = dsm->sum((uint64_t)(per_node_tp * 1000));
-
+    printf("number %d\n", number);
     printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
     printf("cache hit rate: %lf\n", hit * 1.0 / all);
     if (dsm->getMyNodeID() == 0) {

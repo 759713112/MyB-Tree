@@ -67,30 +67,7 @@ void thread_run(int id) {
 
   /// without coro
 
-  Timer timer;
-  while (true) {
-
-    uint64_t dis = 0;
-    uint64_t key = 0;
-
-    Value v;
-    timer.begin();
-
-    if (v % 100 < kReadRatio) { // GET
-
-    } else {
-      
-      
-    }
-
-    auto us_10 = timer.end() / 100;
-    if (us_10 >= LATENCY_WINDOWS) {
-      us_10 = LATENCY_WINDOWS - 1;
-    }
-    latency[id][us_10]++;
-
-    tp[id][0]++;
-  }
+  
 #endif
 
 }
